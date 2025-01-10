@@ -1,3 +1,4 @@
+import 'package:app/navbar.dart';
 import 'package:flutter/material.dart';
 
 void main() {
@@ -16,29 +17,11 @@ class HanLogApp extends StatelessWidget {
         colorSchemeSeed: Colors.red,
         useMaterial3: true,
       ),
-      home: const HomePage(title: 'Home'),
-    );
-  }
-}
-
-class HomePage extends StatelessWidget {
-  const HomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ListView.builder(itemBuilder: (context, index) {
-          // TODO search for unresolved groups
-        })
-      ),
-      bottomNavigationBar: BottomAppBar(
-        color: Theme.of(context).colorScheme.inversePrimary,
-        child: Text(title),
-        
+      home: Scaffold(
+        body: Placeholder(), // TODO navigate between various screens of the app
+        bottomNavigationBar: Navbar(),
       ),
     );
   }
 }
+
