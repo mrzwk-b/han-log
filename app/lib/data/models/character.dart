@@ -1,5 +1,5 @@
 class Character {
-  int id;
+  int? id;
   String glyph;
   String notes;
   List<int>? definitiveMeaningIds;
@@ -10,5 +10,22 @@ class Character {
   List<int>? componentIds;
   List<int>? derivedIds;
 
-  Character({required this.id, required this.glyph, this.notes = "",});
+  Character({
+    this.id,
+    required this.glyph,
+    this.notes = "",
+    this.definitiveMeaningIds,
+    this.tentativeMeaningIds,
+    this.extantPronunciations,
+    this.definitivePronunciations,
+    this.tentativePronunciations,
+    this.componentIds,
+    this.derivedIds,  
+  });
+
+  Map<String, Object?> toMap() => {
+    "id": id == 0 ? null : id,
+    "glyph": glyph,
+    "notes": notes,
+  };
 }

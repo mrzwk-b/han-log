@@ -13,21 +13,7 @@ class DbHelper {
     db = await openDatabase(
       join(await getDatabasesPath(), 'han_log.db'),
       onCreate: (database, version) {        
-        // words
-        database.execute(
-          "CREATE TABLE words(id INTEGER PRIMARY KEY, form TEXT, notes TEXT)"
-        );
-        database.execute(
-          "CREATE TABLE wordSynonyms(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
-        );
-        database.execute(
-          "CREATE TABLE wordCalques(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
-        );
-        // morphemes
+        // morphemes TODO standardize to how character CREATE works
         database.execute(
           "CREATE TABLE morphemes(id INTEGER PRIMARY KEY, form TEXT, notes TEXT)"
         );
@@ -41,26 +27,52 @@ class DbHelper {
           "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id), "
           "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id))"
         );
+        // words TODO standardize to how character CREATE works
+        database.execute(
+          "CREATE TABLE words(id INTEGER PRIMARY KEY, form TEXT, notes TEXT)"
+        );
+        database.execute(
+          "CREATE TABLE wordSynonyms(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
+          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
+          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
+        );
+        database.execute(
+          "CREATE TABLE wordCalques(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
+          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
+          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
+        );
         // characters
         database.execute(
-          "CREATE TABLE characters(id INTEGER PRIMARY KEY, glyph TEXT, notes TEXT)"
+          "CREATE TABLE characters("
+          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+          "glyph TEXT NOT NULL UNIQUE, "
+          "notes TEXT NOT NULL)"
         );
         database.execute(
-          "CREATE TABLE characterMeanings(id INTEGER PRIMARY KEY, isDefinitive INTEGER, "
-          "characterId INTEGER, morphemeId INTEGER, "
+          "CREATE TABLE characterMeanings("
+          "isDefinitive INTEGER NOT NULL, "
+          "characterId INTEGER NOT NULL, "
+          "morphemeId INTEGER NOT NULL, "
+          "UNIQUE(characterId, morphemeId), "
           "FOREIGN KEY(characterId) REFERENCES characters(id), "
-          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id))"
+          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id)"
+          ") WITHOUT ROWID"
         );
         database.execute(
-          "CREATE TABLE characterPronunciations(id INTEGER PRIMARY KEY, isDefinitive INTEGER, "
-          "pronunciation TEXT, characterId INTEGER, "
-          "FOREIGN KEY(characterId) REFERENCES characters(id))"
+          "CREATE TABLE characterPronunciations("
+          "isDefinitive INTEGER, "
+          "pronunciation TEXT NOT NULL, "
+          "characterId INTEGER NOT NULL, "
+          "FOREIGN KEY(characterId) REFERENCES characters(id)"
+          ") WITHOUT ROWID"
         );
         database.execute(
-          "CREATE TABLE characterCompositions(id INTEGER PRIMARY KEY, "
-          "componentId INTEGER, composedId INTEGER, "
+          "CREATE TABLE characterCompositions("
+          "componentId INTEGER NOT NULL, "
+          "composedId INTEGER NOT NULL, "
           "FOREIGN KEY(componentId) REFERENCES characters(id), "
-          "FOREIGN KEY(composedId) REFERENCES characters(id))"
+          "FOREIGN KEY(composedId) REFERENCES characters(id)"
+          ") WITHOUT ROWID"
         );
       },
       version: 1
@@ -145,5 +157,71 @@ class DbHelper {
     ).then((value) {char.derivedIds = 
       value.map((item) => item["composedId"] as int).toList()
     ;});
+  }
+
+  Future<int> insertCharacter(Character char) async {
+    int id = await db.insert("characters", char.toMap());
+    if (char.definitiveMeaningIds != null) {
+      for (int morphemeId in char.definitiveMeaningIds!) {
+        await db.insert("characterMeanings", {
+          "isDefinitive": 1,
+          "characterId": char.id,
+          "morphemeId": morphemeId,
+        });
+      }
+    }
+    if (char.tentativeMeaningIds != null) {
+      for (int morphemeId in char.tentativeMeaningIds!) {
+        await db.insert("characterMeanings", {
+          "isDefinitive": 0,
+          "characterId": char.id,
+          "morphemeId": morphemeId,
+        });
+      }
+    }
+    if (char.extantPronunciations != null) {
+      for (String pronunciation in char.extantPronunciations!) {
+        await db.insert("characterPronunciations", {
+          "isDefinitive": null,
+          "characterId": char.id,
+          "pronunciation": pronunciation,
+        });
+      }
+    }
+    if (char.definitivePronunciations != null) {
+      for (String pronunciation in char.definitivePronunciations!) {
+        await db.insert("characterPronunciations", {
+          "isDefinitive": 1,
+          "characterId": char.id,
+          "pronunciation": pronunciation,
+        });
+      }
+    }
+    if (char.tentativePronunciations != null) {
+      for (String pronunciation in char.tentativePronunciations!) {
+        await db.insert("characterPronunciations", {
+          "isDefinitive": 0,
+          "characterId": char.id,
+          "pronunciation": pronunciation,
+        });
+      }
+    }
+    if (char.componentIds != null) {
+      for (int componentId in char.componentIds!) {
+        await db.insert("characterCompositions", {
+          "composedId": char.id,
+          "componentId": componentId,
+        });
+      }
+    }
+    if (char.derivedIds != null) {
+      for (int composedId in char.derivedIds!) {
+        await db.insert("characterCompositions", {
+          "componentId": char.id,
+          "composedId": composedId,
+        });
+      }
+    }    
+    return id;
   }
 }

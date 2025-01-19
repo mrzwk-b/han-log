@@ -1,13 +1,19 @@
 class Morpheme {
   int id;
   String form;
-  List<int> synonymIds;
-  List<int> doubletIds;
   String notes;
+  List<int>? synonymIds;
+  List<int>? doubletIds;
+  int? definitiveCharacterId;
+  List<int>? tentativeCharacterIds;
 
-  Morpheme(this.id, this.form, {
-    this.synonymIds = const [],
-    this.doubletIds = const [],
+  Morpheme({
+    required this.id,
+    required this.form,
+    this.synonymIds,
+    this.doubletIds,
+    this.definitiveCharacterId,
+    this.tentativeCharacterIds,
     this.notes = "",
   });
 }
