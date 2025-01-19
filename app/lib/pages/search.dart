@@ -1,6 +1,3 @@
-import 'package:app/data/data_entry.dart';
-import 'package:app/data/read_db.dart';
-import 'package:app/pages/item.dart';
 import 'package:flutter/material.dart';
 
 enum SearchCategory {morpheme, word, character, none}
@@ -14,44 +11,39 @@ class SearchPage extends StatefulWidget {
 
 class _SeachPageState extends State<SearchPage> {
   SearchCategory category;
-
   _SeachPageState(): category = SearchCategory.none;
 
   @override
   Widget build(BuildContext context) {
-    List<DataEntry> results = getResults(category);
     return Scaffold(
-      body: ListView.builder(itemBuilder: (context, i) {
-        return category == SearchCategory.none || i >= results.length ? 
-          Placeholder() :
-          Card(child: ListTile(
-            onTap: () {Navigator.of(context).push(MaterialPageRoute((_) => ItemPage(results[i])))},
-            leading: Text(results[i].form),
-            title: Text(results[i].notes),  
-          ),)
-        ;
-      }),
+      body: switch (category) {
+        SearchCategory.character => throw UnimplementedError(),
+        SearchCategory.morpheme => throw UnimplementedError(),
+        SearchCategory.word => throw UnimplementedError(),
+        SearchCategory.none => Container(), // might need to find a better empty element TODO
+      },
       bottomNavigationBar: BottomAppBar(child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          IconButton(
-            onPressed: () {Navigator.of(context).pop();},
-            icon: Icon(Icons.home_filled),
-          ),
+          // category
           PopupMenuButton(
+            icon: Icon(Icons.category),
             itemBuilder: (context) => [
+              // morphemes
               PopupMenuItem(child: TextButton(
                 onPressed: () {setState(() {
                   category = SearchCategory.morpheme;
                 });},
                 child: Text("morphemes")
               ),),
+              // words
               PopupMenuItem(child: TextButton(
                 onPressed: () {setState(() {
                   category = SearchCategory.word;
                 });},
                 child: Text("words")
               ),),
+              // characters
               PopupMenuItem(child: TextButton(
                 onPressed: () {setState(() {
                   category = SearchCategory.character;
@@ -59,7 +51,6 @@ class _SeachPageState extends State<SearchPage> {
                 child: Text("characters")
               ),),
             ],
-            icon: Icon(Icons.filter_alt_rounded)
           ),
         ],
       ),),

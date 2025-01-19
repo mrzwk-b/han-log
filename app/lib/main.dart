@@ -1,4 +1,3 @@
-import 'package:app/pages/groups.dart';
 import 'package:app/pages/search.dart';
 import 'package:flutter/material.dart';
 
@@ -18,27 +17,7 @@ class HanLogApp extends StatelessWidget {
         colorSchemeSeed: Colors.red,
         useMaterial3: true,
       ),
-       home: Builder(builder: (context) => 
-        Scaffold(
-          body: Center(child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton(
-                onPressed: () {Navigator.of(context).push(MaterialPageRoute(builder: (_) => 
-                  SearchPage()
-                ));},
-                child: Text("search"),
-              ),
-              ElevatedButton(
-                onPressed: () {Navigator.of(context).push(MaterialPageRoute(builder: (_) => 
-                  GroupsPage()
-                ));},
-                child: Text("groups"),
-              ),
-          ],),)
-        ),
-      )
+       home: SearchPage(),
     );
   }
 }
-
