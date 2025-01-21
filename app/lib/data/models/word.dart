@@ -1,15 +1,23 @@
 class Word {
-  int id;
+  int? id;
   String form;
-  List<int> componentIds;
-  List<int> synonymIds;
-  List<int> calqueIds;
   String notes;
+  List<int>? componentIds;
+  List<int>? synonymIds;
+  List<int>? calqueIds;
 
-  Word(this.id, this.form, {
-    this.componentIds = const [],
-    this.synonymIds = const [],
-    this.calqueIds = const [],
+  Word({
+    required this.id,
+    required this.form, 
+    this.componentIds,
+    this.synonymIds,
+    this.calqueIds,
     this.notes = "",
   });
+  
+  Map<String, Object?> toMap() => {
+    if (id != null) "id": (id == 0)? null : id,
+    "form": form,
+    "notes": notes,
+  };
 }

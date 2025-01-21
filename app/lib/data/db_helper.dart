@@ -1,6 +1,10 @@
-import 'package:app/data/models/character.dart';
+import 'dart:async';
+import 'package:app/data/models/word.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+
+import 'package:app/data/models/character.dart';
+import 'package:app/data/models/morpheme.dart';
 
 class DbHelper {
   late Database db;
@@ -13,33 +17,65 @@ class DbHelper {
     db = await openDatabase(
       join(await getDatabasesPath(), 'han_log.db'),
       onCreate: (database, version) {        
-        // morphemes TODO standardize to how character CREATE works
+        // morphemes
         database.execute(
-          "CREATE TABLE morphemes(id INTEGER PRIMARY KEY, form TEXT, notes TEXT)"
+          "CREATE TABLE morphemes("
+          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+          "form TEXT NOT NULL, "
+          "notes TEXT NOT NULL)"
         );
         database.execute(
-          "CREATE TABLE morphemeSynonyms(id INTEGER PRIMARY KEY, morphemeIdA INTEGER, morphemeIdB INTEGER, "
-          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id), "
-          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id))"
+          "CREATE TABLE morphemeSynonyms("
+          "morphemeIdA INTEGER NOT NULL, "
+          "morphemeIdB INTEGER NOT NULL, "
+          "UNIQUE(morphemeIdA, morphemeIdB), "
+          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
+          ") WITHOUT ROWID"
         );
         database.execute(
-          "CREATE TABLE morphemeDoublets(id INTEGER PRIMARY KEY, morphemeIdA INTEGER, morphemeIdB INTEGER, "
-          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id), "
-          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id))"
+          "CREATE TABLE morphemeDoublets("
+          "morphemeIdA INTEGER NOT NULL, "
+          "morphemeIdB INTEGER NOT NULL, "
+          "UNIQUE(morphemeIdA, morphemeIdB), "
+          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
+          ") WITHOUT ROWID"
         );
-        // words TODO standardize to how character CREATE works
+        // words
         database.execute(
-          "CREATE TABLE words(id INTEGER PRIMARY KEY, form TEXT, notes TEXT)"
+          "CREATE TABLE words("
+          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+          "form TEXT NOT NULL, "
+          "notes TEXT NOT NULL)"
         );
         database.execute(
-          "CREATE TABLE wordSynonyms(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
+          "CREATE TABLE wordCompositions("
+          "wordId INTEGER NOT NULL, "
+          "morphemeId INTEGER NOT NULL, "
+          "position INTEGER, "
+          "UNIQUE(wordId, position), "
+          "FOREIGN KEY(wordId) REFERENCES words(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
+          ") WITHOUT ROWID"
         );
         database.execute(
-          "CREATE TABLE wordCalques(id INTEGER PRIMARY KEY, wordIdA INTEGER, wordIdB INTEGER, "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id), "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id))"
+          "CREATE TABLE wordSynonyms("
+          "wordIdA INTEGER NOT NULL, "
+          "wordIdB INTEGER NOT NULL, "
+          "UNIQUE(wordIdA, wordIdB), "
+          "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
+          ") WITHOUT ROWID"
+        );
+        database.execute(
+          "CREATE TABLE wordCalques("
+          "wordIdA INTEGER NOT NULL, "
+          "wordIdB INTEGER NOT NULL, "
+          "UNIQUE(wordIdA, wordIdB), "
+          "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
+          ") WITHOUT ROWID"
         );
         // characters
         database.execute(
@@ -54,8 +90,8 @@ class DbHelper {
           "characterId INTEGER NOT NULL, "
           "morphemeId INTEGER NOT NULL, "
           "UNIQUE(characterId, morphemeId), "
-          "FOREIGN KEY(characterId) REFERENCES characters(id), "
-          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id)"
+          "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
           ") WITHOUT ROWID"
         );
         database.execute(
@@ -63,15 +99,15 @@ class DbHelper {
           "isDefinitive INTEGER, "
           "pronunciation TEXT NOT NULL, "
           "characterId INTEGER NOT NULL, "
-          "FOREIGN KEY(characterId) REFERENCES characters(id)"
+          "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE"
           ") WITHOUT ROWID"
         );
         database.execute(
           "CREATE TABLE characterCompositions("
           "componentId INTEGER NOT NULL, "
           "composedId INTEGER NOT NULL, "
-          "FOREIGN KEY(componentId) REFERENCES characters(id), "
-          "FOREIGN KEY(composedId) REFERENCES characters(id)"
+          "FOREIGN KEY(componentId) REFERENCES characters(id) ON DELETE CASCADE, "
+          "FOREIGN KEY(composedId) REFERENCES characters(id) ON DELETE CASCADE"
           ") WITHOUT ROWID"
         );
       },
@@ -80,13 +116,263 @@ class DbHelper {
     return db;
   }
 
+  // morphemes
+
+  Future<List<Morpheme>> getMorphemes({
+    Map<String, dynamic>? filter,
+    int? limit,
+    int? offset
+  }) async {
+    List<Map<String, dynamic>> morphs = await db.query("morphemes",
+      where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
+      whereArgs: filter?.values.toList(),
+      columns: ["id", "form", "notes"],
+      limit: limit,
+      offset: offset,
+    );
+    return List.generate(morphs.length, (int i) => Morpheme(
+      id: morphs[i]["id"],
+      form: morphs[i]["form"],
+      notes: morphs[i]["notes"],
+    ), growable: false);
+  }
+
+  Future<void> getMorphemeDetails(Morpheme morph) async {
+    db.query("morphemeSynonyms",
+      where: "morphemeIdA = ? OR morphemeIdB = ?",
+      whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
+    ).then((value) {morph.synonymIds = 
+      value.map((item) => (item["morphemeIdB"] == morph.id ? 
+        item["morphemeIdA"] : 
+        item["morphemeIdB"]
+      ) as int).toList()
+    ;});
+    db.query("morphemeDoublets",
+      where: "morphemeIdA = ? OR morphemeIdB = ?",
+      whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
+    ).then((value) {morph.doubletIds = 
+      value.map((item) => (item["morphemeIdB"] == morph.id ? 
+        item["morphemeIdA"] : 
+        item["morphemeIdB"]
+      ) as int).toList()
+    ;});
+    db.query("characterMeanings",
+      where: "morphemeId = ? AND isDefinitive = 1",
+      whereArgs: [morph.id],
+      columns: ["characterId"],
+    ).then((value) {morph.definitiveCharacterIds = 
+      value.map((item) => item["characterId"] as int).toList()
+    ;});
+    db.query("characterMeanings",
+      where: "morphemeId = ? AND isDefinitive = 0",
+      whereArgs: [morph.id],
+      columns: ["characterId"],
+    ).then((value) {morph.tentativeCharacterIds = 
+      value.map((item) => item["characterId"] as int).toList()
+    ;});
+    db.query("wordCompositions",
+      where: "morphemeId = ?",
+      whereArgs: [morph.id],
+      columns: ["wordId"]
+    ).then((value) {morph.wordIds =
+      value.map((item) => item["wordId"] as int).toList()
+    ;});
+  }
+
+  Future<int> insertMorpheme(Morpheme morph) async {
+    int id = await db.insert("morphemes", morph.toMap());
+    morph.id = id;
+    if (morph.synonymIds != null) {
+      for (int synonymId in morph.synonymIds!) {
+        await db.insert("morphemeSynonyms", {
+          "morphemeIdA": morph.id,
+          "morphemeIdB": synonymId,
+        });
+      }
+    }
+    if (morph.doubletIds != null) {
+      for (int doubletId in morph.doubletIds!) {
+        await db.insert("morphemeDoublets", {
+          "morphemeIdA": morph.id,
+          "morphemeIdB": doubletId,
+        });
+      }
+    }
+    if (morph.definitiveCharacterIds != null) {
+      for (int charId in morph.definitiveCharacterIds!) {
+        await db.insert("characterMeanings", {
+          "isDefinitive": 1,
+          "characterId": charId,
+          "morphemeId": morph.id,
+        });
+      }
+    }
+    if (morph.tentativeCharacterIds != null) {
+      for (int charId in morph.tentativeCharacterIds!) {
+        await db.insert("characterMeanings", {
+          "isDefinitive": 0,
+          "characterId": charId,
+          "morphemeId": morph.id,
+        });
+      }
+    }
+    if (morph.wordIds != null) {
+      for (int wordId in morph.wordIds!) {
+        await db.insert("wordCompositions", {
+          "wordId": wordId,
+          "morphemeId": morph.id,
+        });
+      }
+    }
+    return id;
+  }
+  
+  Future<void> updateMorpheme(Morpheme morph) async {
+    await db.update("morphemes", morph.toMap(), where: "id = ?", whereArgs: [morph.id]);
+  }
+  
+  Future<void> deleteMorpheme(int morphemeId) async {
+    await db.delete("morpheme", where: "id = ?", whereArgs: [morphemeId]);
+  }
+  
+  Future<void> insertMorphemeSynonym(int morphemeIdA, int morphemeIdB) async {
+    await db.insert("morphemeSynonyms", {
+      "morphemeIdA": morphemeIdA,
+      "morphemeIdB": morphemeIdB,
+    });
+  }
+
+  Future<void> deleteMorphemeSynonym(int morphemeIdA, int morphemeIdB) async {
+    await db.delete("morphemeSynonyms",
+      where: "morphemeIdA = ? AND morphemeIdB = ?",
+      whereArgs: [morphemeIdA, morphemeIdB],
+    );
+  }
+  
+  Future<void> insertMorphemeDoublet(int morphemeIdA, int morphemeIdB) async {
+    await db.insert("morphemeDoublets", {
+      "morphemeIdA": morphemeIdA,
+      "morphemeIdB": morphemeIdB,
+    });
+  }
+
+  Future<void> deleteMorphemeDoublet(int morphemeIdA, int morphemeIdB) async {
+    await db.delete("morphemeDoublets",
+      where: "morphemeIdA = ? AND morphemeIdB = ?",
+      whereArgs: [morphemeIdA, morphemeIdB],
+    );
+  }
+
+  // words
+
+  Future<List<Word>> getWords({
+    Map<String, dynamic>? filter,
+    int? limit,
+    int? offset
+  }) async {
+    List<Map<String, dynamic>> words = await db.query("words",
+      where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
+      whereArgs: filter?.values.toList(),
+      columns: ["id", "form", "notes"],
+      limit: limit,
+      offset: offset,
+    );
+    return List.generate(words.length, (int i) => Word(
+      id: words[i]["id"],
+      form: words[i]["form"],
+      notes: words[i]["notes"],
+    ), growable: false);
+  }
+
+  Future<int> insertWord(Word word) async {
+    int id = await db.insert("words", word.toMap());
+    word.id = id;
+    if (word.synonymIds != null) {
+      for (int synonymId in word.synonymIds!) {
+        await db.insert("wordSynonyms", {
+          "wordIdA": word.id,
+          "wordIdB": synonymId,
+        });
+      }
+    }
+    if (word.calqueIds != null) {
+      for (int doubletId in word.calqueIds!) {
+        await db.insert("wordCalques", {
+          "wordIdA": word.id,
+          "wordIdB": doubletId,
+        });
+      }
+    }
+    if (word.componentIds != null) {
+      for (int morphemeId in word.componentIds!) {
+        await db.insert("wordCompositions", {
+          "morphemeId": morphemeId,
+          "wordId": word.id,
+        });
+      }
+    }
+    return id;
+  }
+  
+  Future<void> updateWord(Word word) async {
+    await db.update("words", word.toMap(), where: "id = ?", whereArgs: [word.id]);
+  }
+  
+  Future<void> deleteWord(int wordId) async {
+    await db.delete("word", where: "id = ?", whereArgs: [wordId]);
+  }
+  
+  Future<void> insertWordSynonym(int wordIdA, int wordIdB) async {
+    await db.insert("wordSynonyms", {
+      "wordIdA": wordIdA,
+      "wordIdB": wordIdB,
+    });
+  }
+
+  Future<void> deleteWordSynonym(int wordIdA, int wordIdB) async {
+    await db.delete("wordSynonyms",
+      where: "wordIdA = ? AND wordIdB = ?",
+      whereArgs: [wordIdA, wordIdB],
+    );
+  }
+  
+  Future<void> insertWordCalque(int wordIdA, int wordIdB) async {
+    await db.insert("wordCalques", {
+      "wordIdA": wordIdA,
+      "wordIdB": wordIdB,
+    });
+  }
+
+  Future<void> deleteWordCalque(int wordIdA, int wordIdB) async {
+    await db.delete("wordCalques",
+      where: "wordIdA = ? AND wordIdB = ?",
+      whereArgs: [wordIdA, wordIdB],
+    );
+  }
+
+  Future<void> insertWordComposition(int wordId, int morphemeId, {int? position}) async {
+    await db.insert("wordCompositions", {
+      "wordId": wordId,
+      "morphemeId": morphemeId,
+      "position": position,
+    });
+  }
+
+  Future<void> deleteWordComposition(int wordId, int morphemeId) async {
+    await db.delete("wordCompositions",
+      where: "wordId = ? AND morphemeId = ?",
+      whereArgs: [wordId, morphemeId],
+    );
+  }
+
+  // characters
+
   Future<List<Character>> getCharacters({
     Map<String, dynamic>? filter,
     int? limit,
     int? offset
   }) async {
-    List<Map<String, dynamic>> chars = await db.query(
-      "characters",
+    List<Map<String, dynamic>> chars = await db.query("characters",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
       columns: ["id", "glyph", "notes"],
@@ -101,56 +387,49 @@ class DbHelper {
   }
 
   Future<void> getCharacterDetails(Character char) async {
-    db.query(
-      "characterMeanings", 
+    db.query("characterMeanings", 
       where: "characterId = ? AND isDefinitive = 0",
       whereArgs: [char.id],
       columns: ["morphemeId"],
     ).then((value) {char.tentativeMeaningIds = 
       value.map((item) => item["morphemeId"] as int).toList()
     ;},);
-    db.query(
-      "characterMeanings", 
+    db.query("characterMeanings", 
       where: "characterId = ? AND isDefinitive = 1",
       whereArgs: [char.id],
       columns: ["morphemeId"],
     ).then((value) {char.definitiveMeaningIds = 
       value.map((item) => item["morphemeId"] as int).toList()
     ;},);
-    db.query(
-      "characterPronunciations", 
+    db.query("characterPronunciations", 
       where: "characterId = ? AND isDefinitive = NULL",
       whereArgs: [char.id],
       columns: ["pronunciation"],
     ).then((value) {char.extantPronunciations = 
       value.map((item) => item["pronunciation"] as String).toList()
     ;},);
-    db.query(
-      "characterPronunciations", 
+    db.query("characterPronunciations", 
       where: "characterId = ? AND isDefinitive = 0",
       whereArgs: [char.id],
       columns: ["pronunciation"],
     ).then((value) {char.tentativePronunciations = 
       value.map((item) => item["pronunciation"] as String).toList()
     ;},);
-    db.query(
-      "characterPronunciations", 
+    db.query("characterPronunciations", 
       where: "characterId = ? AND isDefinitive = 1",
       whereArgs: [char.id],
       columns: ["pronunciation"],
     ).then((value) {char.definitivePronunciations =
       value.map((item) => item["pronunciation"] as String).toList()
     ;});
-    db.query(
-      "characterCompositions", 
+    db.query("characterCompositions", 
       where: "composedId = ?",
       whereArgs: [char.id],
       columns: ["componentId"],
     ).then((value) {char.componentIds = 
       value.map((item) => item["componentId"] as int).toList()
     ;},);
-    db.query(
-      "characterCompositions", 
+    db.query("characterCompositions", 
       where: "componentId = ?",
       whereArgs: [char.id],
       columns: ["composedId"],
@@ -161,6 +440,7 @@ class DbHelper {
 
   Future<int> insertCharacter(Character char) async {
     int id = await db.insert("characters", char.toMap());
+    char.id = id;
     if (char.definitiveMeaningIds != null) {
       for (int morphemeId in char.definitiveMeaningIds!) {
         await db.insert("characterMeanings", {
@@ -223,5 +503,77 @@ class DbHelper {
       }
     }    
     return id;
+  }
+
+  Future<void> updateCharacter(Character char) async {
+    await db.update("characters", char.toMap(), where: "id = ?", whereArgs: [char.id]);
+  }
+
+  Future<void> deleteCharacter(int characterId) async {
+    await db.delete("character", where: "id = ?", whereArgs: [characterId]);
+  }
+
+  Future<void> insertCharacterMeaning({
+    required int characterId, 
+    required int morphemeId,
+    required bool isDefinitive,
+  }) async {
+    db.insert("characterMeanings", {
+      "characterId": characterId,
+      "morphemeId": morphemeId,
+      "isDefinitive": isDefinitive ? 1:0
+    });
+  }
+
+  Future<void> deleteCharacterMeaning({
+    required int characterId,
+    required int morphemeId,
+  }) async {
+    db.delete("characterMeanings",
+      where: "characterId = ? AND morphemeId = ?",
+      whereArgs: [characterId, morphemeId]
+    );
+  }
+
+  Future<void> insertCharacterPronunciation({
+    required int characterId,
+    required String pronunciation,
+    required bool? isDefinitive,
+  }) async {
+    db.insert("characterPronunciations", {
+      "characterId": characterId,
+      "pronunciation": pronunciation,
+      "isDefinitive": isDefinitive == null ? null : isDefinitive ? 1:0
+    });
+  }
+  
+  Future<void> deleteCharacterPronunciation({
+    required int characterId,
+    required String pronunciation,
+  }) async {
+    db.delete("characterPronunciations",
+      where: "characterId = ? AND pronunciation = ?",
+      whereArgs: [characterId, pronunciation],
+    );
+  }
+  
+  Future<void> insertCharacterComposition({
+    required int componentId,
+    required int composedId,
+  }) async {
+    db.insert("characterCompositions", {
+      "componentId": componentId,
+      "composedId": composedId,
+    });
+  }
+
+  Future<void> deleteCharacterComposition({
+    required int componentId,
+    required int composedId,
+  }) async {
+    db.delete("characterCompositions",
+      where: "componentId = ? AND composedId = ?",
+      whereArgs: [componentId, composedId],
+    );
   }
 }

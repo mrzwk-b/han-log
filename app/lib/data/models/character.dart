@@ -13,18 +13,18 @@ class Character {
   Character({
     this.id,
     required this.glyph,
-    this.notes = "",
     this.definitiveMeaningIds,
     this.tentativeMeaningIds,
     this.extantPronunciations,
     this.definitivePronunciations,
     this.tentativePronunciations,
     this.componentIds,
-    this.derivedIds,  
+    this.derivedIds,
+    this.notes = "",  
   });
 
   Map<String, Object?> toMap() => {
-    "id": id == 0 ? null : id,
+    if (id != null) "id": (id == 0)? null : id,
     "glyph": glyph,
     "notes": notes,
   };
