@@ -7,7 +7,7 @@ class Word {
   List<int>? calqueIds;
 
   Word({
-    required this.id,
+    this.id,
     required this.form, 
     this.componentIds,
     this.synonymIds,

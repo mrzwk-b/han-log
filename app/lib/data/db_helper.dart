@@ -138,45 +138,47 @@ class DbHelper {
   }
 
   Future<void> getMorphemeDetails(Morpheme morph) async {
-    db.query("morphemeSynonyms",
-      where: "morphemeIdA = ? OR morphemeIdB = ?",
-      whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
-    ).then((value) {morph.synonymIds = 
-      value.map((item) => (item["morphemeIdB"] == morph.id ? 
-        item["morphemeIdA"] : 
-        item["morphemeIdB"]
-      ) as int).toList()
-    ;});
-    db.query("morphemeDoublets",
-      where: "morphemeIdA = ? OR morphemeIdB = ?",
-      whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
-    ).then((value) {morph.doubletIds = 
-      value.map((item) => (item["morphemeIdB"] == morph.id ? 
-        item["morphemeIdA"] : 
-        item["morphemeIdB"]
-      ) as int).toList()
-    ;});
-    db.query("characterMeanings",
-      where: "morphemeId = ? AND isDefinitive = 1",
-      whereArgs: [morph.id],
-      columns: ["characterId"],
-    ).then((value) {morph.definitiveCharacterIds = 
-      value.map((item) => item["characterId"] as int).toList()
-    ;});
-    db.query("characterMeanings",
-      where: "morphemeId = ? AND isDefinitive = 0",
-      whereArgs: [morph.id],
-      columns: ["characterId"],
-    ).then((value) {morph.tentativeCharacterIds = 
-      value.map((item) => item["characterId"] as int).toList()
-    ;});
-    db.query("wordCompositions",
-      where: "morphemeId = ?",
-      whereArgs: [morph.id],
-      columns: ["wordId"]
-    ).then((value) {morph.wordIds =
-      value.map((item) => item["wordId"] as int).toList()
-    ;});
+    for (Future assignment in [
+      db.query("morphemeSynonyms",
+        where: "morphemeIdA = ? OR morphemeIdB = ?",
+        whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
+      ).then((value) {morph.synonymIds = 
+        value.map((item) => (item["morphemeIdB"] == morph.id ? 
+          item["morphemeIdA"] : 
+          item["morphemeIdB"]
+        ) as int).toList()
+      ;}),
+      db.query("morphemeDoublets",
+        where: "morphemeIdA = ? OR morphemeIdB = ?",
+        whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
+      ).then((value) {morph.doubletIds = 
+        value.map((item) => (item["morphemeIdB"] == morph.id ? 
+          item["morphemeIdA"] : 
+          item["morphemeIdB"]
+        ) as int).toList()
+      ;}),
+      db.query("characterMeanings",
+        where: "morphemeId = ? AND isDefinitive = 1",
+        whereArgs: [morph.id],
+        columns: ["characterId"],
+      ).then((value) {morph.definitiveCharacterIds = 
+        value.map((item) => item["characterId"] as int).toList()
+      ;}),
+      db.query("characterMeanings",
+        where: "morphemeId = ? AND isDefinitive = 0",
+        whereArgs: [morph.id],
+        columns: ["characterId"],
+      ).then((value) {morph.tentativeCharacterIds = 
+        value.map((item) => item["characterId"] as int).toList()
+      ;}),
+      db.query("wordCompositions",
+        where: "morphemeId = ?",
+        whereArgs: [morph.id],
+        columns: ["wordId"]
+      ).then((value) {morph.wordIds =
+        value.map((item) => item["wordId"] as int).toList()
+      ;}),
+    ]) {await assignment;}
   }
 
   Future<int> insertMorpheme(Morpheme morph) async {
@@ -284,6 +286,35 @@ class DbHelper {
     ), growable: false);
   }
 
+  Future<void> getWordDetails(Word word) async {
+    for (Future assignment in [      
+      db.query("wordCompositions", 
+        where: "wordId = ?",
+        whereArgs: [word.id],
+      ).then((value) {word.componentIds =
+        value.map((item) => item["morphemeId"] as int).toList()
+      ;}),
+      db.query("wordSynonyms",
+        where: "wordIdA = ? OR wordIdB = ?",
+        whereArgs: [word.id]
+      ).then((value) {word.synonymIds = 
+        value.map((item) => (item["wordIdB"] == word.id ? 
+          item["wordIdA"] : 
+          item["wordIdB"]
+        ) as int).toList()
+      ;}),
+      db.query("wordCalques",
+        where: "wordIdA = ? OR wordIdB = ?",
+        whereArgs: [word.id]
+      ).then((value) {word.calqueIds = 
+        value.map((item) => (item["wordIdB"] == word.id ? 
+          item["wordIdA"] : 
+          item["wordIdB"]
+        ) as int).toList()
+      ;}),
+    ]) {await assignment;}
+  }
+
   Future<int> insertWord(Word word) async {
     int id = await db.insert("words", word.toMap());
     word.id = id;
@@ -387,55 +418,57 @@ class DbHelper {
   }
 
   Future<void> getCharacterDetails(Character char) async {
-    db.query("characterMeanings", 
-      where: "characterId = ? AND isDefinitive = 0",
-      whereArgs: [char.id],
-      columns: ["morphemeId"],
-    ).then((value) {char.tentativeMeaningIds = 
-      value.map((item) => item["morphemeId"] as int).toList()
-    ;},);
-    db.query("characterMeanings", 
-      where: "characterId = ? AND isDefinitive = 1",
-      whereArgs: [char.id],
-      columns: ["morphemeId"],
-    ).then((value) {char.definitiveMeaningIds = 
-      value.map((item) => item["morphemeId"] as int).toList()
-    ;},);
-    db.query("characterPronunciations", 
-      where: "characterId = ? AND isDefinitive = NULL",
-      whereArgs: [char.id],
-      columns: ["pronunciation"],
-    ).then((value) {char.extantPronunciations = 
-      value.map((item) => item["pronunciation"] as String).toList()
-    ;},);
-    db.query("characterPronunciations", 
-      where: "characterId = ? AND isDefinitive = 0",
-      whereArgs: [char.id],
-      columns: ["pronunciation"],
-    ).then((value) {char.tentativePronunciations = 
-      value.map((item) => item["pronunciation"] as String).toList()
-    ;},);
-    db.query("characterPronunciations", 
-      where: "characterId = ? AND isDefinitive = 1",
-      whereArgs: [char.id],
-      columns: ["pronunciation"],
-    ).then((value) {char.definitivePronunciations =
-      value.map((item) => item["pronunciation"] as String).toList()
-    ;});
-    db.query("characterCompositions", 
-      where: "composedId = ?",
-      whereArgs: [char.id],
-      columns: ["componentId"],
-    ).then((value) {char.componentIds = 
-      value.map((item) => item["componentId"] as int).toList()
-    ;},);
-    db.query("characterCompositions", 
-      where: "componentId = ?",
-      whereArgs: [char.id],
-      columns: ["composedId"],
-    ).then((value) {char.derivedIds = 
+    for (Future assignment in [
+      db.query("characterMeanings", 
+        where: "characterId = ? AND isDefinitive = 0",
+        whereArgs: [char.id],
+        columns: ["morphemeId"],
+      ).then((value) {char.tentativeMeaningIds = 
+        value.map((item) => item["morphemeId"] as int).toList()
+      ;},),
+      db.query("characterMeanings", 
+        where: "characterId = ? AND isDefinitive = 1",
+        whereArgs: [char.id],
+        columns: ["morphemeId"],
+      ).then((value) {char.definitiveMeaningIds = 
+        value.map((item) => item["morphemeId"] as int).toList()
+      ;},),
+      db.query("characterPronunciations", 
+        where: "characterId = ? AND isDefinitive = NULL",
+        whereArgs: [char.id],
+        columns: ["pronunciation"],
+      ).then((value) {char.extantPronunciations = 
+        value.map((item) => item["pronunciation"] as String).toList()
+      ;},),
+      db.query("characterPronunciations", 
+        where: "characterId = ? AND isDefinitive = 0",
+        whereArgs: [char.id],
+        columns: ["pronunciation"],
+      ).then((value) {char.tentativePronunciations = 
+        value.map((item) => item["pronunciation"] as String).toList()
+      ;},),
+      db.query("characterPronunciations", 
+        where: "characterId = ? AND isDefinitive = 1",
+        whereArgs: [char.id],
+        columns: ["pronunciation"],
+      ).then((value) {char.definitivePronunciations =
+        value.map((item) => item["pronunciation"] as String).toList()
+      ;}),
+      db.query("characterCompositions", 
+        where: "composedId = ?",
+        whereArgs: [char.id],
+        columns: ["componentId"],
+      ).then((value) {char.componentIds = 
+        value.map((item) => item["componentId"] as int).toList()
+      ;},),
+      db.query("characterCompositions", 
+        where: "componentId = ?",
+        whereArgs: [char.id],
+        columns: ["composedId"],
+      ).then((value) {char.derivedIds = 
       value.map((item) => item["composedId"] as int).toList()
-    ;});
+      ;}),
+    ]) {await assignment;}
   }
 
   Future<int> insertCharacter(Character char) async {
@@ -518,7 +551,7 @@ class DbHelper {
     required int morphemeId,
     required bool isDefinitive,
   }) async {
-    db.insert("characterMeanings", {
+    await db.insert("characterMeanings", {
       "characterId": characterId,
       "morphemeId": morphemeId,
       "isDefinitive": isDefinitive ? 1:0
@@ -529,7 +562,7 @@ class DbHelper {
     required int characterId,
     required int morphemeId,
   }) async {
-    db.delete("characterMeanings",
+    await db.delete("characterMeanings",
       where: "characterId = ? AND morphemeId = ?",
       whereArgs: [characterId, morphemeId]
     );
@@ -540,7 +573,7 @@ class DbHelper {
     required String pronunciation,
     required bool? isDefinitive,
   }) async {
-    db.insert("characterPronunciations", {
+    await db.insert("characterPronunciations", {
       "characterId": characterId,
       "pronunciation": pronunciation,
       "isDefinitive": isDefinitive == null ? null : isDefinitive ? 1:0
@@ -551,7 +584,7 @@ class DbHelper {
     required int characterId,
     required String pronunciation,
   }) async {
-    db.delete("characterPronunciations",
+    await db.delete("characterPronunciations",
       where: "characterId = ? AND pronunciation = ?",
       whereArgs: [characterId, pronunciation],
     );
@@ -561,7 +594,7 @@ class DbHelper {
     required int componentId,
     required int composedId,
   }) async {
-    db.insert("characterCompositions", {
+    await db.insert("characterCompositions", {
       "componentId": componentId,
       "composedId": composedId,
     });
@@ -571,7 +604,7 @@ class DbHelper {
     required int componentId,
     required int composedId,
   }) async {
-    db.delete("characterCompositions",
+    await db.delete("characterCompositions",
       where: "componentId = ? AND composedId = ?",
       whereArgs: [componentId, composedId],
     );

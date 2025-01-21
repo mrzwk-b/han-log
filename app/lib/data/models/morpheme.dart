@@ -9,7 +9,7 @@ class Morpheme {
   List<int>? wordIds;
 
   Morpheme({
-    required this.id,
+    this.id,
     required this.form,
     this.synonymIds,
     this.doubletIds,
