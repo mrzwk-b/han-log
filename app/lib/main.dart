@@ -1,4 +1,4 @@
-import 'package:app/widgets/pages/search.dart';
+import 'package:app/widgets/search/search_page.dart';
 import 'package:flutter/material.dart';
 
 void main() {

@@ -1,8 +1,9 @@
 import 'package:app/widgets/listviews/characters_list.dart';
 import 'package:app/widgets/listviews/morphemes_list.dart';
+import 'package:app/widgets/search/search_dialog.dart';
+import 'package:app/widgets/search/search_filter.dart';
 import 'package:flutter/material.dart';
 
-enum SearchCategory {morpheme, word, character, none}
 
 class SearchPage extends StatefulWidget {
   const SearchPage({super.key});
@@ -12,32 +13,28 @@ class SearchPage extends StatefulWidget {
 }
 
 class _SeachPageState extends State<SearchPage> {
-  SearchCategory category;
-  Map<String, dynamic> filter;
-
-  _SeachPageState(): 
-    category = SearchCategory.none, 
-    filter = {}
-  ;
+  SearchFilter searchFilter;
+  _SeachPageState(): searchFilter = SearchFilter();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: switch (category) {
+      body: switch (searchFilter.searchCategory) {
         SearchCategory.character => CharactersList(), // TODO
-        SearchCategory.morpheme => MorphemesList(filter),
+        SearchCategory.morpheme => MorphemesList(),
         SearchCategory.word => throw UnimplementedError(), // TODO
         SearchCategory.none => Container(), // might need to find a better empty element TODO
       },
       bottomNavigationBar: BottomAppBar(child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // category
+          // apply search filters
           IconButton(icon: Icon(Icons.filter_alt), onPressed: () {
-            showDialog(context: context, builder: (context) => AlertDialog(
-              // TODO
-            ),);
+            showDialog(context: context, builder: (context) => SearchDialog()).then(
+              (value) {setState(() {searchFilter = value;});}
+            );
           },),
+          // add entry
           IconButton(icon: Icon(Icons.add), onPressed: () {
             // TODO
           },),
