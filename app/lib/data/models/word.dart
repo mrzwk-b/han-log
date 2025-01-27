@@ -1,22 +1,21 @@
-class Word {
-  int? id;
-  String form;
-  String notes;
+import 'package:app/data/models/data_model.dart';
+
+class Word extends DataModel {
   List<int>? componentIds;
   List<int>? synonymIds;
   List<int>? calqueIds;
 
   Word({
-    this.id,
-    required this.form, 
+    super.id = 0,
+    required super.form, 
     this.componentIds,
     this.synonymIds,
     this.calqueIds,
-    this.notes = "",
+    super.notes = "",
   });
   
   Map<String, Object?> toMap() => {
-    if (id != null) "id": (id == 0)? null : id,
+    "id": (id == 0)? null : id,
     "form": form,
     "notes": notes,
   };

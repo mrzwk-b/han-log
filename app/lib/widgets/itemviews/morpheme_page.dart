@@ -1,6 +1,6 @@
 import 'package:app/data/db_helper.dart';
 import 'package:app/data/models/morpheme.dart';
-import 'package:app/widgets/listviews/morphemes_list.dart';
+import 'package:app/widgets/items_list.dart';
 import 'package:flutter/material.dart';
 
 /// displays the details of a morpheme, potentially editable,
@@ -45,7 +45,7 @@ class _MorphemePageState extends State<MorphemePage> {
           Text(morpheme?.form ?? "")
         ,
       ]),
-      // should guarantee that morpheme has been entered into db before filling in other fields
+      // TODO guarantee that morpheme has been entered into db before filling in other fields
       Row(children: [
         Text("notes"),
         (editMode) ? 
@@ -55,9 +55,9 @@ class _MorphemePageState extends State<MorphemePage> {
       ]),
       Row(children: [
         Text("synonyms"),
-        if (editMode) IconButton(onPressed: () {}, icon: Icon(Icons.add))
+        ItemsList(), // TODO figure out how to pass the list
       ]),
-      MorphemesList(),
+      ItemsList(),
     ]);
   }
 }

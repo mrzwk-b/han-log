@@ -524,7 +524,7 @@ class DbHelper {
     );
     return List.generate(chars.length, (int i) => Character(
       id: chars[i]["id"],
-      glyph: chars[i]["glyph"],
+      form: chars[i]["glyph"],
       notes: chars[i]["notes"],
     ), growable: false);
   }

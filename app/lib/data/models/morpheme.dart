@@ -1,7 +1,6 @@
-class Morpheme {
-  int? id;
-  String form;
-  String notes;
+import 'package:app/data/models/data_model.dart';
+
+class Morpheme extends DataModel {
   List<int>? synonymIds;
   List<int>? doubletIds;
   List<int>? definitiveCharacterIds;
@@ -9,18 +8,18 @@ class Morpheme {
   List<int>? wordIds;
 
   Morpheme({
-    this.id,
-    required this.form,
+    super.id = 0,
+    required super.form,
     this.synonymIds,
     this.doubletIds,
     this.definitiveCharacterIds,
     this.tentativeCharacterIds,
     this.wordIds,
-    this.notes = "",
+    super.notes = "",
   });
   
   Map<String, Object?> toMap() => {
-    if (id != null) "id": (id == 0)? null : id,
+    "id": (id == 0)? null : id,
     "form": form,
     "notes": notes,
   };

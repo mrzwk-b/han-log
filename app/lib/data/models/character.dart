@@ -1,7 +1,6 @@
-class Character {
-  int? id;
-  String glyph;
-  String notes;
+import 'package:app/data/models/data_model.dart';
+
+class Character extends DataModel {
   List<int>? definitiveMeaningIds;
   List<int>? tentativeMeaningIds;
   List<String>? extantPronunciations;
@@ -11,8 +10,8 @@ class Character {
   List<int>? derivedIds;
 
   Character({
-    this.id,
-    required this.glyph,
+    super.id = 0,
+    required super.form,
     this.definitiveMeaningIds,
     this.tentativeMeaningIds,
     this.extantPronunciations,
@@ -20,12 +19,12 @@ class Character {
     this.tentativePronunciations,
     this.componentIds,
     this.derivedIds,
-    this.notes = "",  
+    super.notes = "",  
   });
 
   Map<String, Object?> toMap() => {
-    if (id != null) "id": (id == 0)? null : id,
-    "glyph": glyph,
+    "id": (id == 0)? null : id,
+    "glyph": form,
     "notes": notes,
   };
 }

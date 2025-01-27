@@ -1,5 +1,4 @@
-import 'package:app/widgets/listviews/characters_list.dart';
-import 'package:app/widgets/listviews/morphemes_list.dart';
+import 'package:app/widgets/items_list.dart';
 import 'package:app/widgets/search/search_dialog.dart';
 import 'package:app/widgets/search/search_filter.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +20,7 @@ class _SeachPageState extends State<SearchPage> {
     return Scaffold(
       body: switch (searchFilter.searchCategory) {
         SearchCategory.character => CharactersList(), // TODO
-        SearchCategory.morpheme => MorphemesList(),
+        SearchCategory.morpheme => ItemsList(),
         SearchCategory.word => throw UnimplementedError(), // TODO
         SearchCategory.none => Container(), // might need to find a better empty element TODO
       },
