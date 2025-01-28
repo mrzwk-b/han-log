@@ -1,30 +1,31 @@
 import 'package:app/data/models/data_model.dart';
+import 'package:app/data/models/morpheme.dart';
 
 class Character extends DataModel {
-  List<int>? definitiveMeaningIds;
-  List<int>? tentativeMeaningIds;
+  List<Morpheme>? definitiveMeanings;
+  List<Morpheme>? tentativeMeanings;
   List<String>? extantPronunciations;
   List<String>? definitivePronunciations;
   List<String>? tentativePronunciations;
-  List<int>? componentIds;
-  List<int>? derivedIds;
+  List<Character>? components;
+  List<Character>? products;
 
   Character({
     super.id = 0,
     required super.form,
-    this.definitiveMeaningIds,
-    this.tentativeMeaningIds,
+    this.definitiveMeanings,
+    this.tentativeMeanings,
     this.extantPronunciations,
     this.definitivePronunciations,
     this.tentativePronunciations,
-    this.componentIds,
-    this.derivedIds,
+    this.components,
+    this.products,
     super.notes = "",  
   });
 
   Map<String, Object?> toMap() => {
     "id": (id == 0)? null : id,
-    "glyph": form,
+    "form": form,
     "notes": notes,
   };
 }

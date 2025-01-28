@@ -1,3 +1,5 @@
+enum ItemType {morpheme, word, character, none}
+
 class DataModel {
   int id;
   String form;

@@ -1,20 +1,22 @@
+import 'package:app/data/models/character.dart';
 import 'package:app/data/models/data_model.dart';
+import 'package:app/data/models/word.dart';
 
 class Morpheme extends DataModel {
-  List<int>? synonymIds;
-  List<int>? doubletIds;
-  List<int>? definitiveCharacterIds;
-  List<int>? tentativeCharacterIds;
-  List<int>? wordIds;
+  List<Morpheme>? synonyms;
+  List<Morpheme>? doublets;
+  List<Character>? definitiveCharacters;
+  List<Character>? tentativeCharacters;
+  List<Word>? words;
 
   Morpheme({
     super.id = 0,
     required super.form,
-    this.synonymIds,
-    this.doubletIds,
-    this.definitiveCharacterIds,
-    this.tentativeCharacterIds,
-    this.wordIds,
+    this.synonyms,
+    this.doublets,
+    this.definitiveCharacters,
+    this.tentativeCharacters,
+    this.words,
     super.notes = "",
   });
   

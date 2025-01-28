@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 
 class ItemsList extends StatefulWidget {
   final String title;
-  /// if this DataModelsList is being used to display ts associated with another item,
+  /// if this DataModelsList is being used to display items associated with another item,
   /// use an Affiliation to pass functions to insert and delete associations in the database
-  final Affiliation? affiliation;
+  final Affiliation affiliation;
   /// the initial list of items displayed by this widget
   final List<DataModel> items;
   /// set if this widget is being used to select from a list of search results
@@ -19,12 +19,7 @@ class ItemsList extends StatefulWidget {
     this.items = const [],
     this.returnMode = false,
     super.key
-  }): 
-    assert(
-      !returnMode || affiliation == null, 
-      "return mode prohibits modification of list"
-    )
-  ;
+  });
   
   @override
   State<StatefulWidget> createState() => _ItemsListState();
@@ -39,12 +34,10 @@ class _ItemsListState extends State<ItemsList> {
 
   Future<void> addItem() async {
     DataModel item = await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => SearchPage(
-        // returnMode: true // DataModelODO make SearchPage responsive to this parameter
-      ),)
+      MaterialPageRoute(builder: (context) => SearchPage(returnMode: true),)
     ) as DataModel;
     items.add(item);
-    widget.affiliation!.insert(item.id);
+    widget.affiliation.insert!(item.id);
     setState(() {});
   }
 
@@ -54,16 +47,14 @@ class _ItemsListState extends State<ItemsList> {
       Row(children: [
         Text(widget.title),
         // buttons for adding and removing items
-        if (widget.affiliation != null) for (Widget item in [
-          IconButton(
-            onPressed: () {addItem();},
-            icon: Icon(Icons.add)
-          ),
-          IconButton(
-            onPressed: () {removeMode = !removeMode;},
-            icon: (removeMode) ? Icon(Icons.done) : Icon(Icons.remove)
-          ),
-        ]) item
+        if (widget.affiliation.insert != null) IconButton(
+          onPressed: () {addItem();},
+          icon: Icon(Icons.add)
+        ),
+        if (widget.affiliation.delete != null) IconButton(
+          onPressed: () {removeMode = !removeMode;},
+          icon: (removeMode) ? Icon(Icons.done) : Icon(Icons.remove)
+        ),
       ],),
       ListView.builder(
         itemCount: items.length,
@@ -72,7 +63,7 @@ class _ItemsListState extends State<ItemsList> {
           subtitle: Text(items[index].notes),
           onTap: 
             (removeMode) ? () {
-              widget.affiliation!.delete(items[index].id);
+              widget.affiliation.delete!(items[index].id);
             }:
             (widget.returnMode) ? () {
               Navigator.of(context).pop(items[index]);

@@ -1,16 +1,18 @@
+import 'package:app/data/models/data_model.dart';
 import 'package:app/widgets/search/search_filter.dart';
 import 'package:flutter/material.dart';
 
 /// dialog for applying filters to a search
 class SearchDialog extends StatefulWidget {
-  const SearchDialog({super.key});
+  final ItemType categoryLock;
+  const SearchDialog({super.key, this.categoryLock = ItemType.none,});
 
   @override
   State<SearchDialog> createState() => _SearchDialogState();
 }
 
 class _SearchDialogState extends State<SearchDialog> {
-  SearchCategory searchCategory = SearchCategory.none;
+  ItemType searchCategory = ItemType.none;
   Map<String, dynamic> filtersMap = {};
 
   @override
@@ -18,39 +20,39 @@ class _SearchDialogState extends State<SearchDialog> {
     return SimpleDialog(
       title: Text("Search Filters"),
       children: [
-        Row(children: [
+        if (widget.categoryLock == ItemType.none) Row(children: [
           TextButton(
             onPressed: () {setState(() {
-              searchCategory = SearchCategory.morpheme;
+              searchCategory = ItemType.morpheme;
             });},
             child: Text("morphemes"),
           ),
           TextButton(
             onPressed: () {setState(() {
-              searchCategory = SearchCategory.word;              
+              searchCategory = ItemType.word;              
             });},
             child: Text("words"),
           ),
           TextButton(
             onPressed: () {setState(() {
-              searchCategory = SearchCategory.character;              
+              searchCategory = ItemType.character;              
             });},
             child: Text("characters"),
           ),
         ],),
-        if (searchCategory == SearchCategory.morpheme) for (Widget item in [
+        if (searchCategory == ItemType.morpheme) for (Widget item in [
           // TODO morpheme search filters
         ]) item,
-        if (searchCategory == SearchCategory.word) for (Widget item in [
+        if (searchCategory == ItemType.word) for (Widget item in [
           // TODO word filter fields
         ]) item,
-        if (searchCategory == SearchCategory.character) for (Widget item in [
+        if (searchCategory == ItemType.character) for (Widget item in [
           // TODO character filter fields
         ]) item,
         TextButton(child: Text("done"),
           onPressed: () {
             Navigator.of(context).pop(
-              SearchFilter(searchCategory: searchCategory, filtersMap: filtersMap)
+              SearchFilter(category: searchCategory, filtersMap: filtersMap)
             );
           },
         ),

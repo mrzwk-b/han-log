@@ -17,7 +17,7 @@ class HanLogApp extends StatelessWidget {
         colorSchemeSeed: Colors.red,
         useMaterial3: true,
       ),
-       home: SearchPage(),
+      home: SearchPage(returnMode: false,),
     );
   }
 }

@@ -81,7 +81,7 @@ class DbHelper {
         await database.execute(
           "CREATE TABLE characters("
           "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-          "glyph TEXT NOT NULL UNIQUE, "
+          "form TEXT NOT NULL UNIQUE, "
           "notes TEXT NOT NULL)"
         );
         await database.execute(
@@ -131,114 +131,55 @@ class DbHelper {
     int? limit,
     int? offset
   }) async {
-    List<Map<String, dynamic>> morphs = await db.query("morphemes",
+    List<Map<String, dynamic>> morphemes = await db.query("morphemes",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
       columns: ["id", "form", "notes"],
       limit: limit,
       offset: offset,
     );
-    return List.generate(morphs.length, (int i) => Morpheme(
-      id: morphs[i]["id"],
-      form: morphs[i]["form"],
-      notes: morphs[i]["notes"],
+    return List.generate(morphemes.length, (int i) => Morpheme(
+      id: morphemes[i]["id"],
+      form: morphemes[i]["form"],
+      notes: morphemes[i]["notes"],
     ), growable: false);
   }
 
-  Future<void> getMorphemeDetails(Morpheme morph) async {
+  Future<void> getMorphemeDetails(Morpheme morpheme) async {
     for (Future assignment in [
-      db.query("morphemeSynonyms",
-        where: "morphemeIdA = ? OR morphemeIdB = ?",
-        whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
-      ).then((value) {morph.synonymIds = 
-        value.map((item) => (item["morphemeIdB"] == morph.id ? 
-          item["morphemeIdA"] : 
-          item["morphemeIdB"]
-        ) as int).toList()
-      ;}),
-      db.query("morphemeDoublets",
-        where: "morphemeIdA = ? OR morphemeIdB = ?",
-        whereArgs: [morph.id] // we may need an extra copy of morph.id in the list, not sure if argument reuse works how i expect
-      ).then((value) {morph.doubletIds = 
-        value.map((item) => (item["morphemeIdB"] == morph.id ? 
-          item["morphemeIdA"] : 
-          item["morphemeIdB"]
-        ) as int).toList()
-      ;}),
-      db.query("characterMeanings",
-        where: "morphemeId = ? AND isDefinitive = 1",
-        whereArgs: [morph.id],
-        columns: ["characterId"],
-      ).then((value) {morph.definitiveCharacterIds = 
-        value.map((item) => item["characterId"] as int).toList()
-      ;}),
-      db.query("characterMeanings",
-        where: "morphemeId = ? AND isDefinitive = 0",
-        whereArgs: [morph.id],
-        columns: ["characterId"],
-      ).then((value) {morph.tentativeCharacterIds = 
-        value.map((item) => item["characterId"] as int).toList()
-      ;}),
-      db.query("wordCompositions",
-        where: "morphemeId = ?",
-        whereArgs: [morph.id],
-        columns: ["wordId"]
-      ).then((value) {morph.wordIds =
-        value.map((item) => item["wordId"] as int).toList()
-      ;}),
+      getMorphemeSynonyms(morpheme.id).then((value) {morpheme.synonyms = value;},),
+      getMorphemeDoublets(morpheme.id).then((value) {morpheme.doublets = value;},),
+      getMorphemeTransliterations(morpheme.id, true).then((value) {morpheme.definitiveCharacters = value;},),
+      getMorphemeTransliterations(morpheme.id, false).then((value) {morpheme.tentativeCharacters = value;},),
+      getMorphemeProducts(morpheme.id).then((value) {morpheme.words = value;},),
     ]) {await assignment;}
   }
 
-  Future<int> insertMorpheme(Morpheme morph) async {
-    int id = await db.insert("morphemes", morph.toMap());
-    morph.id = id;
-    if (morph.synonymIds != null) {
-      for (int synonymId in morph.synonymIds!) {
-        await db.insert("morphemeSynonyms", {
-          "morphemeIdA": morph.id,
-          "morphemeIdB": synonymId,
-        });
-      }
-    }
-    if (morph.doubletIds != null) {
-      for (int doubletId in morph.doubletIds!) {
-        await db.insert("morphemeDoublets", {
-          "morphemeIdA": morph.id,
-          "morphemeIdB": doubletId,
-        });
-      }
-    }
-    if (morph.definitiveCharacterIds != null) {
-      for (int charId in morph.definitiveCharacterIds!) {
-        await db.insert("characterMeanings", {
-          "isDefinitive": 1,
-          "characterId": charId,
-          "morphemeId": morph.id,
-        });
-      }
-    }
-    if (morph.tentativeCharacterIds != null) {
-      for (int charId in morph.tentativeCharacterIds!) {
-        await db.insert("characterMeanings", {
-          "isDefinitive": 0,
-          "characterId": charId,
-          "morphemeId": morph.id,
-        });
-      }
-    }
-    if (morph.wordIds != null) {
-      for (int wordId in morph.wordIds!) {
-        await db.insert("wordCompositions", {
-          "wordId": wordId,
-          "morphemeId": morph.id,
-        });
-      }
-    }
+  Future<int> insertMorpheme(Morpheme morpheme) async {
+    int id = await db.insert("morphemes", morpheme.toMap());
+    morpheme.id = id;
+    for (Future insertion in [
+      for (Morpheme synonym in morpheme.synonyms ?? []) 
+        insertMorphemeSynonym(morpheme.id, synonym.id)
+      ,
+      for (Morpheme doublet in morpheme.doublets ?? [])
+        insertMorphemeDoublet(morpheme.id, doublet.id)
+      ,
+      for (Character character in morpheme.definitiveCharacters ?? [])
+        insertCharacterMeaning(characterId: character.id, morphemeId: morpheme.id, isDefinitive: true)
+      ,
+      for (Character character in morpheme.tentativeCharacters ?? [])
+        insertCharacterMeaning(characterId: character.id, morphemeId: morpheme.id, isDefinitive: false)
+      ,
+      for (Word word in morpheme.words ?? [])
+        insertWordComposition(word.id, morpheme.id)
+      ,
+    ]) {await insertion;}
     return id;
   }
   
-  Future<void> updateMorpheme(Morpheme morph) async {
-    await db.update("morphemes", morph.toMap(), where: "id = ?", whereArgs: [morph.id]);
+  Future<void> updateMorpheme(Morpheme morpheme) async {
+    await db.update("morphemes", morpheme.toMap(), where: "id = ?", whereArgs: [morpheme.id]);
   }
   
   Future<void> deleteMorpheme(int morphemeId) async {
@@ -335,61 +276,27 @@ class DbHelper {
   }
 
   Future<void> getWordDetails(Word word) async {
-    for (Future assignment in [      
-      db.query("wordCompositions", 
-        where: "wordId = ?",
-        whereArgs: [word.id],
-      ).then((value) {word.componentIds =
-        value.map((item) => item["morphemeId"] as int).toList()
-      ;}),
-      db.query("wordSynonyms",
-        where: "wordIdA = ? OR wordIdB = ?",
-        whereArgs: [word.id]
-      ).then((value) {word.synonymIds = 
-        value.map((item) => (item["wordIdB"] == word.id ? 
-          item["wordIdA"] : 
-          item["wordIdB"]
-        ) as int).toList()
-      ;}),
-      db.query("wordCalques",
-        where: "wordIdA = ? OR wordIdB = ?",
-        whereArgs: [word.id]
-      ).then((value) {word.calqueIds = 
-        value.map((item) => (item["wordIdB"] == word.id ? 
-          item["wordIdA"] : 
-          item["wordIdB"]
-        ) as int).toList()
-      ;}),
+    for (Future assignment in [
+      getWordComponents(word.id).then((value) {word.components = value;},),
+      getWordSynonyms(word.id).then((value) {word.synonyms = value;},),
+      getWordCalques(word.id).then((value) {word.calques = value;},),
     ]) {await assignment;}
   }
 
   Future<int> insertWord(Word word) async {
     int id = await db.insert("words", word.toMap());
     word.id = id;
-    if (word.synonymIds != null) {
-      for (int synonymId in word.synonymIds!) {
-        await db.insert("wordSynonyms", {
-          "wordIdA": word.id,
-          "wordIdB": synonymId,
-        });
-      }
-    }
-    if (word.calqueIds != null) {
-      for (int doubletId in word.calqueIds!) {
-        await db.insert("wordCalques", {
-          "wordIdA": word.id,
-          "wordIdB": doubletId,
-        });
-      }
-    }
-    if (word.componentIds != null) {
-      for (int morphemeId in word.componentIds!) {
-        await db.insert("wordCompositions", {
-          "morphemeId": morphemeId,
-          "wordId": word.id,
-        });
-      }
-    }
+    for (Future insertion in [
+      for (Word synonym in word.synonyms ?? []) 
+        insertWordSynonym(word.id, synonym.id)
+      ,
+      for (Word calque in word.calques ?? [])
+        insertWordCalque(word.id, calque.id)
+      ,
+      for (Morpheme morpheme in word.components ?? [])
+        insertWordComposition(word.id, morpheme.id)
+      ,
+    ]) {await insertion;}
     return id;
   }
   
@@ -481,7 +388,7 @@ class DbHelper {
     ];
   }
   
-  Future<List<Word>> getmorphemeProducts(int morphemeId) async {
+  Future<List<Word>> getMorphemeProducts(int morphemeId) async {
     return [
       for(Future<List<Word>> word in [
         for (Map<String, dynamic> product in await db.query("wordCompositions",
@@ -518,140 +425,94 @@ class DbHelper {
     List<Map<String, dynamic>> chars = await db.query("characters",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
-      columns: ["id", "glyph", "notes"],
+      columns: ["id", "form", "notes"],
       limit: limit,
       offset: offset,
     );
     return List.generate(chars.length, (int i) => Character(
       id: chars[i]["id"],
-      form: chars[i]["glyph"],
+      form: chars[i]["form"],
       notes: chars[i]["notes"],
     ), growable: false);
   }
 
-  Future<void> getCharacterDetails(Character char) async {
+  Future<void> getCharacterDetails(Character character) async {
     for (Future assignment in [
-      db.query("characterMeanings", 
-        where: "characterId = ? AND isDefinitive = 0",
-        whereArgs: [char.id],
-        columns: ["morphemeId"],
-      ).then((value) {char.tentativeMeaningIds = 
-        value.map((item) => item["morphemeId"] as int).toList()
-      ;},),
-      db.query("characterMeanings", 
-        where: "characterId = ? AND isDefinitive = 1",
-        whereArgs: [char.id],
-        columns: ["morphemeId"],
-      ).then((value) {char.definitiveMeaningIds = 
-        value.map((item) => item["morphemeId"] as int).toList()
-      ;},),
-      db.query("characterPronunciations", 
-        where: "characterId = ? AND isDefinitive = NULL",
-        whereArgs: [char.id],
-        columns: ["pronunciation"],
-      ).then((value) {char.extantPronunciations = 
-        value.map((item) => item["pronunciation"] as String).toList()
-      ;},),
-      db.query("characterPronunciations", 
-        where: "characterId = ? AND isDefinitive = 0",
-        whereArgs: [char.id],
-        columns: ["pronunciation"],
-      ).then((value) {char.tentativePronunciations = 
-        value.map((item) => item["pronunciation"] as String).toList()
-      ;},),
-      db.query("characterPronunciations", 
-        where: "characterId = ? AND isDefinitive = 1",
-        whereArgs: [char.id],
-        columns: ["pronunciation"],
-      ).then((value) {char.definitivePronunciations =
-        value.map((item) => item["pronunciation"] as String).toList()
-      ;}),
-      db.query("characterCompositions", 
-        where: "composedId = ?",
-        whereArgs: [char.id],
-        columns: ["componentId"],
-      ).then((value) {char.componentIds = 
-        value.map((item) => item["componentId"] as int).toList()
-      ;},),
-      db.query("characterCompositions", 
-        where: "componentId = ?",
-        whereArgs: [char.id],
-        columns: ["composedId"],
-      ).then((value) {char.derivedIds = 
-      value.map((item) => item["composedId"] as int).toList()
-      ;}),
+      getCharacterMeanings(character.id, true).then((value) {
+        character.definitiveMeanings = value;
+      },),
+      getCharacterMeanings(character.id, false).then((value) {
+        character.tentativeMeanings = value;
+      },),
+      getCharacterPronunciations(character.id, null).then((value) {
+        character.extantPronunciations = value;
+      }),
+      getCharacterPronunciations(character.id, true).then((value) {
+        character.definitivePronunciations = value;
+      }),
+      getCharacterPronunciations(character.id, false).then((value) {
+        character.tentativePronunciations = value;
+      }),
+      getCharacterComponents(character.id).then((value) {
+        character.components = value;
+      },),
+      getCharacterProducts(character.id).then((value) {
+        character.products = value;
+      },),
     ]) {await assignment;}
   }
 
-  Future<int> insertCharacter(Character char) async {
-    int id = await db.insert("characters", char.toMap());
-    char.id = id;
-    if (char.definitiveMeaningIds != null) {
-      for (int morphemeId in char.definitiveMeaningIds!) {
-        await db.insert("characterMeanings", {
-          "isDefinitive": 1,
-          "characterId": char.id,
-          "morphemeId": morphemeId,
-        });
-      }
-    }
-    if (char.tentativeMeaningIds != null) {
-      for (int morphemeId in char.tentativeMeaningIds!) {
-        await db.insert("characterMeanings", {
-          "isDefinitive": 0,
-          "characterId": char.id,
-          "morphemeId": morphemeId,
-        });
-      }
-    }
-    if (char.extantPronunciations != null) {
-      for (String pronunciation in char.extantPronunciations!) {
-        await db.insert("characterPronunciations", {
-          "isDefinitive": null,
-          "characterId": char.id,
-          "pronunciation": pronunciation,
-        });
-      }
-    }
-    if (char.definitivePronunciations != null) {
-      for (String pronunciation in char.definitivePronunciations!) {
-        await db.insert("characterPronunciations", {
-          "isDefinitive": 1,
-          "characterId": char.id,
-          "pronunciation": pronunciation,
-        });
-      }
-    }
-    if (char.tentativePronunciations != null) {
-      for (String pronunciation in char.tentativePronunciations!) {
-        await db.insert("characterPronunciations", {
-          "isDefinitive": 0,
-          "characterId": char.id,
-          "pronunciation": pronunciation,
-        });
-      }
-    }
-    if (char.componentIds != null) {
-      for (int componentId in char.componentIds!) {
-        await db.insert("characterCompositions", {
-          "composedId": char.id,
-          "componentId": componentId,
-        });
-      }
-    }
-    if (char.derivedIds != null) {
-      for (int composedId in char.derivedIds!) {
-        await db.insert("characterCompositions", {
-          "componentId": char.id,
-          "composedId": composedId,
-        });
-      }
-    }    
+  Future<int> insertCharacter(Character character) async {
+    int id = await db.insert("characters", character.toMap());
+    character.id = id;
+    for (Future insertion in [
+      for (Morpheme morpheme in character.definitiveMeanings ?? [])
+        insertCharacterMeaning(
+          characterId: character.id,
+          morphemeId: morpheme.id,
+          isDefinitive: true
+        )
+      ,
+      for (Morpheme morpheme in character.tentativeMeanings ?? [])
+        insertCharacterMeaning(
+          characterId: character.id,
+          morphemeId: morpheme.id,
+          isDefinitive: false
+        )
+      ,
+      for (String pronunciation in character.extantPronunciations ?? [])
+        insertCharacterPronunciation(
+          characterId: character.id,
+          pronunciation: pronunciation,
+          isDefinitive: null
+        )
+      ,
+      for (String pronunciation in character.definitivePronunciations!)
+        insertCharacterPronunciation(
+          characterId: character.id,
+          pronunciation: pronunciation,
+          isDefinitive: true
+        )
+      ,
+      for (String pronunciation in character.tentativePronunciations!)
+        insertCharacterPronunciation(
+          characterId: character.id,
+          pronunciation: pronunciation,
+          isDefinitive: false
+        )
+      ,
+      for (Character component in character.components ?? [])
+        insertCharacterComposition(componentId: component.id, composedId: character.id)
+      ,
+      for (Character product in character.products ?? [])
+        insertCharacterComposition(componentId: character.id, composedId: product.id)
+      ,
+    ]) {await insertion;}
     return id;
   }
 
-  Future<void> updateCharacter(Character char) async {
-    await db.update("characters", char.toMap(), where: "id = ?", whereArgs: [char.id]);
+  Future<void> updateCharacter(Character character) async {
+    await db.update("characters", character.toMap(), where: "id = ?", whereArgs: [character.id]);
   }
 
   Future<void> deleteCharacter(int characterId) async {
@@ -664,9 +525,21 @@ class DbHelper {
         for (Map<String, dynamic> meaning in await db.query("characterMeanings",
           where: "characterId = ? AND isDefinitive = ?",
           whereArgs: [characterId, isDefinitive?1:0],
-          columns: ["morphemeId"]
+          columns: ["morphemeId"],
         )) getMorphemes(filter: {"id": meaning["morphemeId"]})
       ]) (await morpheme).single
+    ];
+  }
+
+  Future<List<Character>> getMorphemeTransliterations(int morphemeId, bool isDefinitive) async {
+    return [
+      for (Future<List<Character>> character in [
+        for (Map<String, dynamic> transliteration in await db.query("characterMeanings",
+          where: "morphemeId = ? AND isDefinitive = ?",
+          whereArgs: [morphemeId, isDefinitive?1:0],
+          columns: ["characterId"],
+        )) getCharacters(filter: {"id": transliteration["characterId"]})
+      ]) (await character).single
     ];
   }
 
@@ -692,11 +565,11 @@ class DbHelper {
     );
   }
 
-  Future<List<String>> getCharacterPronunciations(int characterId, bool isDefinitive) async {
+  Future<List<String>> getCharacterPronunciations(int characterId, bool? isDefinitive) async {
     return [
       for (Map<String, dynamic> pronunciation in await db.query("characterPronunciations",
         where: "characterId = ? AND isDefinitive = ?",
-        whereArgs: [characterId, isDefinitive?1:0],
+        whereArgs: [characterId, (isDefinitive == null) ? null : isDefinitive?1:0],
         columns: ["pronunciation"]
       )) pronunciation["pronunciation"]
     ];

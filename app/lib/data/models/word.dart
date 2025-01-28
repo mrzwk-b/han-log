@@ -1,16 +1,17 @@
 import 'package:app/data/models/data_model.dart';
+import 'package:app/data/models/morpheme.dart';
 
 class Word extends DataModel {
-  List<int>? componentIds;
-  List<int>? synonymIds;
-  List<int>? calqueIds;
+  List<Morpheme>? components;
+  List<Word>? synonyms;
+  List<Word>? calques;
 
   Word({
     super.id = 0,
     required super.form, 
-    this.componentIds,
-    this.synonymIds,
-    this.calqueIds,
+    this.components,
+    this.synonyms,
+    this.calques,
     super.notes = "",
   });
   

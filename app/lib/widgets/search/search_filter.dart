@@ -1,10 +1,10 @@
-enum SearchCategory {morpheme, word, character, none}
+import 'package:app/data/models/data_model.dart';
 
 class SearchFilter {
-  SearchCategory searchCategory;
+  ItemType category;
   Map<String, dynamic> filtersMap;
   SearchFilter({
-    this.searchCategory = SearchCategory.none,
+    this.category = ItemType.none,
     this.filtersMap = const {},
   });
 }
