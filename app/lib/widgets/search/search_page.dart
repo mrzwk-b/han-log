@@ -1,16 +1,17 @@
-import 'package:app/data/affiliation.dart';
 import 'package:app/data/models/data_model.dart';
+import 'package:app/widgets/item_page.dart';
 import 'package:app/widgets/items_list.dart';
 import 'package:app/widgets/search/search_dialog.dart';
 import 'package:app/widgets/search/search_filter.dart';
 import 'package:flutter/material.dart';
 
 class SearchPage extends StatefulWidget {
-  final ItemType categoryLock;
-  final bool returnMode;
-  const SearchPage({super.key,
-    required this.returnMode,
-    this.categoryLock = ItemType.none,
+  /// if this page is being used to search for an item to return,
+  /// set [lockedCategory] to a value other than [ItemType.none]
+  /// representing the type of item to be returned
+  final ItemType lockedCategory;
+  const SearchPage({super.key, 
+    this.lockedCategory = ItemType.none,
   });
   
   @override
@@ -19,7 +20,13 @@ class SearchPage extends StatefulWidget {
 
 class _SeachPageState extends State<SearchPage> {
   late SearchFilter searchFilter;
-  _SeachPageState() {searchFilter = SearchFilter(category: widget.categoryLock);}
+  _SeachPageState();
+
+  @override
+  void initState() {
+    super.initState();
+    searchFilter = SearchFilter(category: widget.lockedCategory);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,17 +34,19 @@ class _SeachPageState extends State<SearchPage> {
       // search results
       body: ItemsList(
         title: "results",
-        affiliation: Affiliation(itemType: searchFilter.category),
-        returnMode: widget.returnMode,
+        itemType: searchFilter.category,
+        returnMode: widget.lockedCategory != ItemType.none,
       ),
       // appbar
       bottomNavigationBar: BottomAppBar(child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // refresh
+          IconButton(onPressed: () {setState(() {});}, icon: Icon(Icons.refresh)),
           // apply search filters
           IconButton(icon: Icon(Icons.filter_alt), onPressed: () {
             showDialog(context: context, builder: (context) => 
-              SearchDialog(categoryLock: widget.categoryLock,)
+              SearchDialog(categoryLock: widget.lockedCategory,)
             ,).then(
               (value) {setState(() {searchFilter = value;});}
             );
@@ -45,7 +54,7 @@ class _SeachPageState extends State<SearchPage> {
           // add entry
           if (searchFilter.category != ItemType.none) IconButton(icon: Icon(Icons.add), onPressed: () {
             Navigator.of(context).push(MaterialPageRoute(builder: (context) => 
-              Placeholder() // TODO figure out ItemPage
+              ItemPage(searchFilter.category)
             ));
           },),
         ],

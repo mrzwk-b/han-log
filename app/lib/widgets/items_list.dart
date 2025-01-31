@@ -1,21 +1,25 @@
-import 'package:app/data/affiliation.dart';
 import 'package:app/data/models/data_model.dart';
-import 'package:app/widgets/itemviews/morpheme_page.dart';
+import 'package:app/widgets/item_page.dart';
 import 'package:app/widgets/search/search_page.dart';
 import 'package:flutter/material.dart';
 
 class ItemsList extends StatefulWidget {
   final String title;
-  /// if this DataModelsList is being used to display items associated with another item,
-  /// use an Affiliation to pass functions to insert and delete associations in the database
-  final Affiliation affiliation;
+  /// the type of items contained within this list (can be none, but only if [items] is empty)
+  final ItemType itemType;
+  /// if it should be possible to add items to this list, pass a database function with [insert]
+  final Future<void> Function(dynamic)? insert;
+  /// if it should be possible to remove items from this list, pass a database function with [delete]
+  final Future<void> Function(dynamic)? delete;
   /// the initial list of items displayed by this widget
-  final List<DataModel> items;
-  /// set if this widget is being used to select from a list of search results
+  final List<dynamic> items;
+  /// set to [true] if this widget is being used to select from a list of search results
   final bool returnMode;
   const ItemsList({
     required this.title,
-    required this.affiliation,
+    required this.itemType,
+    this.insert,
+    this.delete,
     this.items = const [],
     this.returnMode = false,
     super.key
@@ -26,18 +30,30 @@ class ItemsList extends StatefulWidget {
 }
 
 class _ItemsListState extends State<ItemsList> {
-  late List<DataModel> items;
+  late List<dynamic> items;
   bool removeMode = false;
-  _ItemsListState() {
+  _ItemsListState();
+
+  @override
+  void initState() {
+    super.initState();
     items = widget.items;
   }
 
-  Future<void> addItem() async {
-    DataModel item = await Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => SearchPage(returnMode: true),)
-    ) as DataModel;
-    items.add(item);
-    widget.affiliation.insert!(item.id);
+  Future<void> insertItem() async {
+    DataModel? item = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => SearchPage(lockedCategory: widget.itemType,),)
+    ) as DataModel?;
+    if (item != null) {
+      items.add(item);
+      await widget.insert!(item.id);
+      setState(() {});
+    }
+  }
+
+  Future<void> deleteItem(int index) async {
+    DataModel item = items.removeAt(index);
+    await widget.delete!(item.id);
     setState(() {});
   }
 
@@ -47,35 +63,35 @@ class _ItemsListState extends State<ItemsList> {
       Row(children: [
         Text(widget.title),
         // buttons for adding and removing items
-        if (widget.affiliation.insert != null) IconButton(
-          onPressed: () {addItem();},
+        if (widget.insert != null) IconButton(
+          onPressed: () {insertItem();},
           icon: Icon(Icons.add)
         ),
-        if (widget.affiliation.delete != null) IconButton(
+        if (widget.delete != null) IconButton(
           onPressed: () {removeMode = !removeMode;},
           icon: (removeMode) ? Icon(Icons.done) : Icon(Icons.remove)
         ),
       ],),
-      ListView.builder(
+      Flexible(child: ListView.builder(
         itemCount: items.length,
         itemBuilder: (context, index) => ListTile(
           title: Text(items[index].form),
           subtitle: Text(items[index].notes),
           onTap: 
             (removeMode) ? () {
-              widget.affiliation.delete!(items[index].id);
+              deleteItem(index);
             }:
             (widget.returnMode) ? () {
               Navigator.of(context).pop(items[index]);
             }:
             () { // link mode
               Navigator.of(context).push(MaterialPageRoute(builder: (context) => 
-                MorphemePage(morphemeId: items[index].id) // TODO switch based on affiliation.itemType
+                ItemPage(widget.itemType, itemId: items[index].id)
               ));
             }
           ,
         ),
-      )
+      ),)
     ]);
   }
 }

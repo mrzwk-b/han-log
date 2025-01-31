@@ -40,15 +40,15 @@ class _SearchDialogState extends State<SearchDialog> {
             child: Text("characters"),
           ),
         ],),
-        if (searchCategory == ItemType.morpheme) for (Widget item in [
-          // TODO morpheme search filters
-        ]) item,
-        if (searchCategory == ItemType.word) for (Widget item in [
-          // TODO word filter fields
-        ]) item,
-        if (searchCategory == ItemType.character) for (Widget item in [
-          // TODO character filter fields
-        ]) item,
+        for (Widget item in switch (searchCategory) {
+          // TODO: Handle this case.
+          ItemType.morpheme => throw UnimplementedError(),
+          // TODO: Handle this case.
+          ItemType.word => throw UnimplementedError(),
+          // TODO: Handle this case.
+          ItemType.character => throw UnimplementedError(),
+          ItemType.none => [],
+        }) item,
         TextButton(child: Text("done"),
           onPressed: () {
             Navigator.of(context).pop(

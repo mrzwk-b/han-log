@@ -2,6 +2,7 @@ import 'package:app/data/models/data_model.dart';
 import 'package:app/data/models/morpheme.dart';
 
 class Character extends DataModel {
+  List<Character>? synonyms;
   List<Morpheme>? definitiveMeanings;
   List<Morpheme>? tentativeMeanings;
   List<String>? extantPronunciations;
@@ -13,6 +14,7 @@ class Character extends DataModel {
   Character({
     super.id = 0,
     required super.form,
+    this.synonyms,
     this.definitiveMeanings,
     this.tentativeMeanings,
     this.extantPronunciations,

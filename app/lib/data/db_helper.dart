@@ -153,6 +153,7 @@ class DbHelper {
       getMorphemeTransliterations(morpheme.id, false).then((value) {morpheme.tentativeCharacters = value;},),
       getMorphemeProducts(morpheme.id).then((value) {morpheme.words = value;},),
     ]) {await assignment;}
+    morpheme.hasDetails = true;
   }
 
   Future<int> insertMorpheme(Morpheme morpheme) async {
@@ -172,7 +173,7 @@ class DbHelper {
         insertCharacterMeaning(characterId: character.id, morphemeId: morpheme.id, isDefinitive: false)
       ,
       for (Word word in morpheme.words ?? [])
-        insertWordComposition(word.id, morpheme.id)
+        insertWordComposition(wordId: word.id, morphemeId: morpheme.id)
       ,
     ]) {await insertion;}
     return id;
@@ -281,6 +282,7 @@ class DbHelper {
       getWordSynonyms(word.id).then((value) {word.synonyms = value;},),
       getWordCalques(word.id).then((value) {word.calques = value;},),
     ]) {await assignment;}
+    word.hasDetails = true;
   }
 
   Future<int> insertWord(Word word) async {
@@ -294,7 +296,7 @@ class DbHelper {
         insertWordCalque(word.id, calque.id)
       ,
       for (Morpheme morpheme in word.components ?? [])
-        insertWordComposition(word.id, morpheme.id)
+        insertWordComposition(wordId: word.id, morphemeId: morpheme.id)
       ,
     ]) {await insertion;}
     return id;
@@ -400,7 +402,7 @@ class DbHelper {
     ];
   }
   
-  Future<void> insertWordComposition(int wordId, int morphemeId, {int? position}) async {
+  Future<void> insertWordComposition({required int wordId, required int morphemeId, int? position}) async {
     await db.insert("wordCompositions", {
       "wordId": wordId,
       "morphemeId": morphemeId,
@@ -408,7 +410,7 @@ class DbHelper {
     });
   }
 
-  Future<void> deleteWordComposition(int wordId, int morphemeId) async {
+  Future<void> deleteWordComposition({required int wordId, required int morphemeId}) async {
     await db.delete("wordCompositions",
       where: "wordId = ? AND morphemeId = ?",
       whereArgs: [wordId, morphemeId],
@@ -438,6 +440,9 @@ class DbHelper {
 
   Future<void> getCharacterDetails(Character character) async {
     for (Future assignment in [
+      getCharacterSynonyms(character.id).then((value) {
+        character.synonyms = value;
+      },),
       getCharacterMeanings(character.id, true).then((value) {
         character.definitiveMeanings = value;
       },),
@@ -460,6 +465,7 @@ class DbHelper {
         character.products = value;
       },),
     ]) {await assignment;}
+    character.hasDetails = true;
   }
 
   Future<int> insertCharacter(Character character) async {
