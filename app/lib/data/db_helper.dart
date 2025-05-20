@@ -7,14 +7,14 @@ import 'package:app/data/models/morpheme.dart';
 import 'package:app/data/models/word.dart';
 
 class DbHelper {
-  late Database db;
+  late Database _db;
 
   DbHelper._internal();
   static final DbHelper helper = DbHelper._internal();
   factory DbHelper() => helper;
 
   Future<Database> openDb() async {
-    db = await openDatabase(
+    _db = await openDatabase(
       join(await getDatabasesPath(), 'han_log.db'),
       onCreate: (database, version) async {        
         // morphemes
@@ -121,135 +121,126 @@ class DbHelper {
       },
       version: 1
     );
-    return db;
+    return _db;
   }
 
   // morphemes
 
   Future<List<Morpheme>> getMorphemes({
-    Map<String, dynamic>? filter,
+    Map<String, Object?>? filter,
     int? limit,
     int? offset
-  }) async {
-    List<Map<String, dynamic>> morphemes = await db.query("morphemes",
+  }) async =>
+    (await _db.query("morphemes",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
       columns: ["id", "form", "notes"],
       limit: limit,
       offset: offset,
-    );
-    return List.generate(morphemes.length, (int i) => Morpheme(
-      id: morphemes[i]["id"],
-      form: morphemes[i]["form"],
-      notes: morphemes[i]["notes"],
-    ), growable: false);
-  }
+    )).map((data) => Morpheme(
+      id:  data["id"] as int,
+      form: data["form"] as String,
+      notes: data["notes"] as String,
+    )).toList(growable: false)
+  ;
 
   Future<void> getMorphemeDetails(Morpheme morpheme) async {
     for (Future assignment in [
-      getMorphemeSynonyms(morpheme.id).then((value) {morpheme.synonyms = value;},),
-      getMorphemeDoublets(morpheme.id).then((value) {morpheme.doublets = value;},),
-      getMorphemeTransliterations(morpheme.id, true).then((value) {morpheme.definitiveCharacters = value;},),
-      getMorphemeTransliterations(morpheme.id, false).then((value) {morpheme.tentativeCharacters = value;},),
-      getMorphemeProducts(morpheme.id).then((value) {morpheme.words = value;},),
+      getMorphemeSynonymIds(morpheme.id).then((value) {morpheme.synonyms = value;},),
+      getMorphemeDoubletIds(morpheme.id).then((value) {morpheme.doublets = value;},),
+      getMorphemeTransliterationIds(morpheme.id, true).then((value) {morpheme.definitiveCharacters = value;},),
+      getMorphemeTransliterationIds(morpheme.id, false).then((value) {morpheme.tentativeCharacters = value;},),
+      getMorphemeProductIds(morpheme.id).then((value) {morpheme.words = value;},),
     ]) {await assignment;}
     morpheme.hasDetails = true;
   }
 
   Future<int> insertMorpheme(Morpheme morpheme) async {
-    int id = await db.insert("morphemes", morpheme.toMap());
+    int id = await _db.insert("morphemes", morpheme.toMap());
     morpheme.id = id;
     for (Future insertion in [
-      for (Morpheme synonym in morpheme.synonyms ?? []) 
-        insertMorphemeSynonym(morpheme.id, synonym.id)
+      for (int synonymId in morpheme.synonyms ?? []) 
+        insertMorphemeSynonym(morpheme.id, synonymId)
       ,
-      for (Morpheme doublet in morpheme.doublets ?? [])
-        insertMorphemeDoublet(morpheme.id, doublet.id)
+      for (int doubletId in morpheme.doublets ?? [])
+        insertMorphemeDoublet(morpheme.id, doubletId)
       ,
-      for (Character character in morpheme.definitiveCharacters ?? [])
-        insertCharacterMeaning(characterId: character.id, morphemeId: morpheme.id, isDefinitive: true)
+      for (int characterId in morpheme.definitiveCharacters ?? [])
+        insertCharacterMeaning(characterId: characterId, morphemeId: morpheme.id, isDefinitive: true)
       ,
-      for (Character character in morpheme.tentativeCharacters ?? [])
-        insertCharacterMeaning(characterId: character.id, morphemeId: morpheme.id, isDefinitive: false)
+      for (int characterId in morpheme.tentativeCharacters ?? [])
+        insertCharacterMeaning(characterId: characterId, morphemeId: morpheme.id, isDefinitive: false)
       ,
-      for (Word word in morpheme.words ?? [])
-        insertWordComposition(wordId: word.id, morphemeId: morpheme.id)
+      for (int wordId in morpheme.words ?? [])
+        insertWordComposition(wordId: wordId, morphemeId: morpheme.id)
       ,
     ]) {await insertion;}
     return id;
   }
   
   Future<void> updateMorpheme(Morpheme morpheme) async {
-    await db.update("morphemes", morpheme.toMap(), where: "id = ?", whereArgs: [morpheme.id]);
+    await _db.update("morphemes", morpheme.toMap(), where: "id = ?", whereArgs: [morpheme.id]);
   }
   
   Future<void> deleteMorpheme(int morphemeId) async {
-    await db.delete("morpheme", where: "id = ?", whereArgs: [morphemeId]);
+    await _db.delete("morpheme", where: "id = ?", whereArgs: [morphemeId]);
   }
   
-  Future<List<Morpheme>> getMorphemeSynonyms(int morphemeId) async {
-    return [
-      for(Future<List<Morpheme>> morpheme in [
-        for (Map<String, dynamic> synonym in await db.query("morphemeSynonyms",
-          where: "morphemeIdA = ?",
-          whereArgs: [morphemeId],
-          columns: ["morphemeIdB"]
-        )) getMorphemes(filter: {"id": synonym["morphemeIdB"]})
-      ]) (await morpheme).single
-    ];
-  }
-
+  Future<List<int>> getMorphemeSynonymIds(int morphemeId) async => [
+    for (Map<String, Object?> synonym in await _db.query("morphemeSynonyms",
+      where: "morphemeIdA = ?",
+      whereArgs: [morphemeId],
+      columns: ["morphemeIdB"]
+    )) synonym["morphemeIdB"] as int
+  ];
+  
   Future<void> insertMorphemeSynonym(int morphemeIdA, int morphemeIdB) async {
-    await db.insert("morphemeSynonyms", {
+    await _db.insert("morphemeSynonyms", {
       "morphemeIdA": morphemeIdA,
       "morphemeIdB": morphemeIdB,
     });
-    await db.insert("morphemeSynonyms", {
+    await _db.insert("morphemeSynonyms", {
       "morphemeIdA": morphemeIdB,
       "morphemeIdB": morphemeIdA,
     });
   }
 
   Future<void> deleteMorphemeSynonym(int morphemeIdA, int morphemeIdB) async {
-    await db.delete("morphemeSynonyms",
+    await _db.delete("morphemeSynonyms",
       where: "morphemeIdA = ? AND morphemeIdB = ?",
       whereArgs: [morphemeIdA, morphemeIdB],
     );
-    await db.delete("morphemeSynonyms",
+    await _db.delete("morphemeSynonyms",
       where: "morphemeIdA = ? AND morphemeIdB = ?",
       whereArgs: [morphemeIdB, morphemeIdA],
     );
   }
   
-  Future<List<Morpheme>> getMorphemeDoublets(int morphemeId) async {
-    return [
-      for(Future<List<Morpheme>> morpheme in [
-        for (Map<String, dynamic> doublet in await db.query("morphemeDoublets",
-          where: "morphemeIdA = ?",
-          whereArgs: [morphemeId],
-          columns: ["morphemeIdB"]
-        )) getMorphemes(filter: {"id": doublet["morphemeIdB"]})
-      ]) (await morpheme).single
-    ];
-  }
-
+  Future<List<int>> getMorphemeDoubletIds(int morphemeId) async => [
+    for (Map<String, Object?> doublet in await _db.query("morphemeDoublets",
+      where: "morphemeIdA = ?",
+      whereArgs: [morphemeId],
+      columns: ["morphemeIdB"]
+    )) doublet["morphemeIdB"] as int
+  ];
+  
   Future<void> insertMorphemeDoublet(int morphemeIdA, int morphemeIdB) async {
-    await db.insert("morphemeDoublets", {
+    await _db.insert("morphemeDoublets", {
       "morphemeIdA": morphemeIdA,
       "morphemeIdB": morphemeIdB,
     });
-    await db.insert("morphemeDoublets", {
+    await _db.insert("morphemeDoublets", {
       "morphemeIdA": morphemeIdB,
       "morphemeIdB": morphemeIdA,
     });
   }
 
   Future<void> deleteMorphemeDoublet(int morphemeIdA, int morphemeIdB) async {
-    await db.delete("morphemeDoublets",
+    await _db.delete("morphemeDoublets",
       where: "morphemeIdA = ? AND morphemeIdB = ?",
       whereArgs: [morphemeIdA, morphemeIdB],
     );
-    await db.delete("morphemeDoublets",
+    await _db.delete("morphemeDoublets",
       where: "morphemeIdA = ? AND morphemeIdB = ?",
       whereArgs: [morphemeIdB, morphemeIdA],
     );
@@ -258,152 +249,135 @@ class DbHelper {
   // words
 
   Future<List<Word>> getWords({
-    Map<String, dynamic>? filter,
+    Map<String, Object?>? filter,
     int? limit,
     int? offset
-  }) async {
-    List<Map<String, dynamic>> words = await db.query("words",
+  }) async => (await _db.query("words",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
       columns: ["id", "form", "notes"],
       limit: limit,
       offset: offset,
-    );
-    return List.generate(words.length, (int i) => Word(
-      id: words[i]["id"],
-      form: words[i]["form"],
-      notes: words[i]["notes"],
-    ), growable: false);
-  }
+    )).map((data) => Word(
+      id: data["id"] as int,
+      form: data["form"] as String,
+      notes: data["notes"] as String,
+    )).toList(growable: false)
+  ;
+  
 
   Future<void> getWordDetails(Word word) async {
     for (Future assignment in [
       getWordComponents(word.id).then((value) {word.components = value;},),
-      getWordSynonyms(word.id).then((value) {word.synonyms = value;},),
-      getWordCalques(word.id).then((value) {word.calques = value;},),
+      getWordSynonymIds(word.id).then((value) {word.synonyms = value;},),
+      getWordCalqueIds(word.id).then((value) {word.calques = value;},),
     ]) {await assignment;}
     word.hasDetails = true;
   }
 
   Future<int> insertWord(Word word) async {
-    int id = await db.insert("words", word.toMap());
+    int id = await _db.insert("words", word.toMap());
     word.id = id;
     for (Future insertion in [
-      for (Word synonym in word.synonyms ?? []) 
-        insertWordSynonym(word.id, synonym.id)
+      for (int synonymId in word.synonyms ?? []) 
+        insertWordSynonym(word.id, synonymId)
       ,
-      for (Word calque in word.calques ?? [])
-        insertWordCalque(word.id, calque.id)
+      for (int calqueId in word.calques ?? [])
+        insertWordCalque(word.id, calqueId)
       ,
-      for (Morpheme morpheme in word.components ?? [])
-        insertWordComposition(wordId: word.id, morphemeId: morpheme.id)
+      for (int morphemeId in word.components ?? [])
+        insertWordComposition(wordId: word.id, morphemeId: morphemeId)
       ,
     ]) {await insertion;}
     return id;
   }
   
   Future<void> updateWord(Word word) async {
-    await db.update("words", word.toMap(), where: "id = ?", whereArgs: [word.id]);
+    await _db.update("words", word.toMap(), where: "id = ?", whereArgs: [word.id]);
   }
   
   Future<void> deleteWord(int wordId) async {
-    await db.delete("word", where: "id = ?", whereArgs: [wordId]);
+    await _db.delete("word", where: "id = ?", whereArgs: [wordId]);
   }
   
-  Future<List<Word>> getWordSynonyms(int wordId) async {
-    return [
-      for(Future<List<Word>> word in [
-        for (Map<String, dynamic> synonym in await db.query("wordSynonyms",
-          where: "wordIdA = ?",
-          whereArgs: [wordId],
-          columns: ["wordIdB"]
-        )) getWords(filter: {"id": synonym["wordIdB"]})
-      ]) (await word).single
-    ];
-  }
-
+  Future<List<int>> getWordSynonymIds(int wordId) async => [
+    for (Map<String, Object?> synonym in await _db.query("wordSynonyms",
+      where: "wordIdA = ?",
+      whereArgs: [wordId],
+      columns: ["wordIdB"]
+    )) synonym["wordIdB"] as int
+  ];
+  
   Future<void> insertWordSynonym(int wordIdA, int wordIdB) async {
-    await db.insert("wordSynonyms", {
+    await _db.insert("wordSynonyms", {
       "wordIdA": wordIdA,
       "wordIdB": wordIdB,
     });
-    await db.insert("wordSynonyms", {
+    await _db.insert("wordSynonyms", {
       "wordIdA": wordIdB,
       "wordIdB": wordIdA,
     });
   }
 
   Future<void> deleteWordSynonym(int wordIdA, int wordIdB) async {
-    await db.delete("wordSynonyms",
+    await _db.delete("wordSynonyms",
       where: "wordIdA = ? AND wordIdB = ?",
       whereArgs: [wordIdA, wordIdB],
     );
-    await db.delete("wordSynonyms",
+    await _db.delete("wordSynonyms",
       where: "wordIdA = ? AND wordIdB = ?",
       whereArgs: [wordIdB, wordIdA],
     );
   }
   
-  Future<List<Word>> getWordCalques(int wordId) async {
-    return [
-      for(Future<List<Word>> word in [
-        for (Map<String, dynamic> synonym in await db.query("wordCalques",
-          where: "wordIdA = ?",
-          whereArgs: [wordId],
-          columns: ["wordIdB"]
-        )) getWords(filter: {"id": synonym["wordIdB"]})
-      ]) (await word).single
-    ];
-  }
+  Future<List<int>> getWordCalqueIds(int wordId) async => [
+    for (Map<String, Object?> synonym in await _db.query("wordCalques",
+      where: "wordIdA = ?",
+      whereArgs: [wordId],
+      columns: ["wordIdB"]
+    )) synonym["wordIdB"] as int
+  ];
   
   Future<void> insertWordCalque(int wordIdA, int wordIdB) async {
-    await db.insert("wordCalques", {
+    await _db.insert("wordCalques", {
       "wordIdA": wordIdA,
       "wordIdB": wordIdB,
     });
-    await db.insert("wordCalques", {
+    await _db.insert("wordCalques", {
       "wordIdA": wordIdB,
       "wordIdB": wordIdA,
     });
   }
 
   Future<void> deleteWordCalque(int wordIdA, int wordIdB) async {
-    await db.delete("wordCalques",
+    await _db.delete("wordCalques",
       where: "wordIdA = ? AND wordIdB = ?",
       whereArgs: [wordIdA, wordIdB],
     );
-    await db.delete("wordCalques",
+    await _db.delete("wordCalques",
       where: "wordIdA = ? AND wordIdB = ?",
       whereArgs: [wordIdB, wordIdA],
     );
   }
 
-  Future<List<Morpheme>> getWordComponents(int wordId) async {
-    return [
-      for(Future<List<Morpheme>> morpheme in [
-        for (Map<String, dynamic> component in await db.query("wordCompositions",
-          where: "wordId = ?",
-          whereArgs: [wordId],
-          columns: ["morphemeId"]
-        )) getMorphemes(filter: {"id": component["morphemeId"]})
-      ]) (await morpheme).single
-    ];
-  }
+  Future<List<int>> getWordComponents(int wordId) async => [
+    for (Map<String, Object?> component in await _db.query("wordCompositions",
+      where: "wordId = ?",
+      whereArgs: [wordId],
+      columns: ["morphemeId"]
+    )) component["morphemeId"] as int
+  ];
   
-  Future<List<Word>> getMorphemeProducts(int morphemeId) async {
-    return [
-      for(Future<List<Word>> word in [
-        for (Map<String, dynamic> product in await db.query("wordCompositions",
-          where: "morphemeId = ?",
-          whereArgs: [morphemeId],
-          columns: ["wordId"]
-        )) getWords(filter: {"id": product["wordId"]})
-      ]) (await word).single
-    ];
-  }
+  Future<List<int>> getMorphemeProductIds(int morphemeId) async => [
+    for (Map<String, Object?> product in await _db.query("wordCompositions",
+      where: "morphemeId = ?",
+      whereArgs: [morphemeId],
+      columns: ["wordId"]
+    )) product["wordId"] as int
+  ];
   
   Future<void> insertWordComposition({required int wordId, required int morphemeId, int? position}) async {
-    await db.insert("wordCompositions", {
+    await _db.insert("wordCompositions", {
       "wordId": wordId,
       "morphemeId": morphemeId,
       "position": position,
@@ -411,7 +385,7 @@ class DbHelper {
   }
 
   Future<void> deleteWordComposition({required int wordId, required int morphemeId}) async {
-    await db.delete("wordCompositions",
+    await _db.delete("wordCompositions",
       where: "wordId = ? AND morphemeId = ?",
       whereArgs: [wordId, morphemeId],
     );
@@ -420,33 +394,30 @@ class DbHelper {
   // characters
 
   Future<List<Character>> getCharacters({
-    Map<String, dynamic>? filter,
+    Map<String, Object?>? filter,
     int? limit,
     int? offset
-  }) async {
-    List<Map<String, dynamic>> chars = await db.query("characters",
+  }) async => (await _db.query("characters",
       where: filter == null ? null : [for (String key in filter.keys) "$key = ?"].join(),
       whereArgs: filter?.values.toList(),
       columns: ["id", "form", "notes"],
       limit: limit,
       offset: offset,
-    );
-    return List.generate(chars.length, (int i) => Character(
-      id: chars[i]["id"],
-      form: chars[i]["form"],
-      notes: chars[i]["notes"],
-    ), growable: false);
-  }
+    )).map((data) => Character(
+      id: data["id"] as int,
+      form: data["form"] as String,
+      notes: data["notes"] as String,
+    )).toList(growable: false);
 
   Future<void> getCharacterDetails(Character character) async {
     for (Future assignment in [
       getCharacterSynonyms(character.id).then((value) {
         character.synonyms = value;
       },),
-      getCharacterMeanings(character.id, true).then((value) {
+      getCharacterMeaningIds(character.id, true).then((value) {
         character.definitiveMeanings = value;
       },),
-      getCharacterMeanings(character.id, false).then((value) {
+      getCharacterMeaningIds(character.id, false).then((value) {
         character.tentativeMeanings = value;
       },),
       getCharacterPronunciations(character.id, null).then((value) {
@@ -469,20 +440,20 @@ class DbHelper {
   }
 
   Future<int> insertCharacter(Character character) async {
-    int id = await db.insert("characters", character.toMap());
+    int id = await _db.insert("characters", character.toMap());
     character.id = id;
     for (Future insertion in [
-      for (Morpheme morpheme in character.definitiveMeanings ?? [])
+      for (int morphemeId in character.definitiveMeanings ?? [])
         insertCharacterMeaning(
           characterId: character.id,
-          morphemeId: morpheme.id,
+          morphemeId: morphemeId,
           isDefinitive: true
         )
       ,
-      for (Morpheme morpheme in character.tentativeMeanings ?? [])
+      for (int morphemeId in character.tentativeMeanings ?? [])
         insertCharacterMeaning(
           characterId: character.id,
-          morphemeId: morpheme.id,
+          morphemeId: morphemeId,
           isDefinitive: false
         )
       ,
@@ -507,54 +478,46 @@ class DbHelper {
           isDefinitive: false
         )
       ,
-      for (Character component in character.components ?? [])
-        insertCharacterComposition(componentId: component.id, composedId: character.id)
+      for (int componentId in character.components ?? [])
+        insertCharacterComposition(componentId: componentId, composedId: character.id)
       ,
-      for (Character product in character.products ?? [])
-        insertCharacterComposition(componentId: character.id, composedId: product.id)
+      for (int productId in character.products ?? [])
+        insertCharacterComposition(componentId: character.id, composedId: productId)
       ,
     ]) {await insertion;}
     return id;
   }
 
   Future<void> updateCharacter(Character character) async {
-    await db.update("characters", character.toMap(), where: "id = ?", whereArgs: [character.id]);
+    await _db.update("characters", character.toMap(), where: "id = ?", whereArgs: [character.id]);
   }
 
   Future<void> deleteCharacter(int characterId) async {
-    await db.delete("character", where: "id = ?", whereArgs: [characterId]);
+    await _db.delete("character", where: "id = ?", whereArgs: [characterId]);
   }
 
-  Future<List<Morpheme>> getCharacterMeanings(int characterId, bool isDefinitive) async {
-    return [
-      for(Future<List<Morpheme>> morpheme in [
-        for (Map<String, dynamic> meaning in await db.query("characterMeanings",
-          where: "characterId = ? AND isDefinitive = ?",
-          whereArgs: [characterId, isDefinitive?1:0],
-          columns: ["morphemeId"],
-        )) getMorphemes(filter: {"id": meaning["morphemeId"]})
-      ]) (await morpheme).single
-    ];
-  }
+  Future<List<int>> getCharacterMeaningIds(int characterId, bool isDefinitive) async => [
+    for (Map<String, Object?> meaning in await _db.query("characterMeanings",
+      where: "characterId = ? AND isDefinitive = ?",
+      whereArgs: [characterId, isDefinitive?1:0],
+      columns: ["morphemeId"],
+    )) meaning["morphemeId"] as int
+  ];
 
-  Future<List<Character>> getMorphemeTransliterations(int morphemeId, bool isDefinitive) async {
-    return [
-      for (Future<List<Character>> character in [
-        for (Map<String, dynamic> transliteration in await db.query("characterMeanings",
-          where: "morphemeId = ? AND isDefinitive = ?",
-          whereArgs: [morphemeId, isDefinitive?1:0],
-          columns: ["characterId"],
-        )) getCharacters(filter: {"id": transliteration["characterId"]})
-      ]) (await character).single
-    ];
-  }
-
+  Future<List<int>> getMorphemeTransliterationIds(int morphemeId, bool isDefinitive) async => [
+    for (Map<String, Object?> transliteration in await _db.query("characterMeanings",
+      where: "morphemeId = ? AND isDefinitive = ?",
+      whereArgs: [morphemeId, isDefinitive?1:0],
+      columns: ["characterId"],
+    )) transliteration["characterId"] as int
+  ];
+  
   Future<void> insertCharacterMeaning({
     required int characterId, 
     required int morphemeId,
     required bool isDefinitive,
   }) async {
-    await db.insert("characterMeanings", {
+    await _db.insert("characterMeanings", {
       "characterId": characterId,
       "morphemeId": morphemeId,
       "isDefinitive": isDefinitive ? 1:0
@@ -565,28 +528,26 @@ class DbHelper {
     required int characterId,
     required int morphemeId,
   }) async {
-    await db.delete("characterMeanings",
+    await _db.delete("characterMeanings",
       where: "characterId = ? AND morphemeId = ?",
       whereArgs: [characterId, morphemeId]
     );
   }
 
-  Future<List<String>> getCharacterPronunciations(int characterId, bool? isDefinitive) async {
-    return [
-      for (Map<String, dynamic> pronunciation in await db.query("characterPronunciations",
-        where: "characterId = ? AND isDefinitive = ?",
-        whereArgs: [characterId, (isDefinitive == null) ? null : isDefinitive?1:0],
-        columns: ["pronunciation"]
-      )) pronunciation["pronunciation"]
-    ];
-  }
+  Future<List<String>> getCharacterPronunciations(int characterId, bool? isDefinitive) async => [
+    for (Map<String, Object?> pronunciation in await _db.query("characterPronunciations",
+      where: "characterId = ? AND isDefinitive = ?",
+      whereArgs: [characterId, (isDefinitive == null) ? null : isDefinitive?1:0],
+      columns: ["pronunciation"]
+    )) pronunciation["pronunciation"] as String
+  ];
 
   Future<void> insertCharacterPronunciation({
     required int characterId,
     required String pronunciation,
     required bool? isDefinitive,
   }) async {
-    await db.insert("characterPronunciations", {
+    await _db.insert("characterPronunciations", {
       "characterId": characterId,
       "pronunciation": pronunciation,
       "isDefinitive": isDefinitive == null ? null : isDefinitive ? 1:0
@@ -597,41 +558,34 @@ class DbHelper {
     required int characterId,
     required String pronunciation,
   }) async {
-    await db.delete("characterPronunciations",
+    await _db.delete("characterPronunciations",
       where: "characterId = ? AND pronunciation = ?",
       whereArgs: [characterId, pronunciation],
     );
   }
   
-  Future<List<Character>> getCharacterComponents(int characterId) async {
-    return [
-      for(Future<List<Character>> character in [
-        for (Map<String, dynamic> component in await db.query("characterCompositions",
-          where: "composedId = ?",
-          whereArgs: [characterId],
-          columns: ["componentId"]
-        )) getCharacters(filter: {"id": component["componentId"]})
-      ]) (await character).single
-    ];
-  }
+  Future<List<int>> getCharacterComponents(int characterId) async => [
+    for (Map<String, Object?> component in await _db.query("characterCompositions",
+      where: "composedId = ?",
+      whereArgs: [characterId],
+      columns: ["componentId"]
+    )) component["componentId"] as int
+  ];
+
   
-  Future<List<Character>> getCharacterProducts(int characterId) async {
-    return [
-      for(Future<List<Character>> character in [
-        for (Map<String, dynamic> composed in await db.query("characterCompositions",
-          where: "componentId = ?",
-          whereArgs: [characterId],
-          columns: ["composedId"]
-        )) getCharacters(filter: {"id": composed["composedId"]})
-      ]) (await character).single
-    ];
-  }
+  Future<List<int>> getCharacterProducts(int characterId) async =>[
+    for (Map<String, Object?> composed in await _db.query("characterCompositions",
+      where: "componentId = ?",
+      whereArgs: [characterId],
+      columns: ["composedId"]
+    )) composed["composedId"] as int
+  ];
 
   Future<void> insertCharacterComposition({
     required int componentId,
     required int composedId,
   }) async {
-    await db.insert("characterCompositions", {
+    await _db.insert("characterCompositions", {
       "componentId": componentId,
       "composedId": composedId,
     });
@@ -641,41 +595,37 @@ class DbHelper {
     required int componentId,
     required int composedId,
   }) async {
-    await db.delete("characterCompositions",
+    await _db.delete("characterCompositions",
       where: "componentId = ? AND composedId = ?",
       whereArgs: [componentId, composedId],
     );
   }
 
-  Future<List<Character>> getCharacterSynonyms(int characterId) async {
-    return [
-      for(Future<List<Character>> character in [
-        for (Map<String, dynamic> synonym in await db.query("characterSynonyms",
-          where: "characterIdA = ?",
-          whereArgs: [characterId],
-          columns: ["characterIdB"]
-        )) getCharacters(filter: {"id": synonym["characterIdB"]})
-      ]) (await character).single
-    ];
-  }
+  Future<List<int>> getCharacterSynonyms(int characterId) async => [
+    for (Map<String, Object?> synonym in await _db.query("characterSynonyms",
+      where: "characterIdA = ?",
+      whereArgs: [characterId],
+      columns: ["characterIdB"]
+    )) synonym["characterIdB"] as int
+  ];
 
   Future<void> insertCharacterSynonym(int characterIdA, int characterIdB) async {
-    await db.insert("characterSynonyms", {
+    await _db.insert("characterSynonyms", {
       "characterIdA": characterIdA,
       "characterIdB": characterIdB,
     });
-    await db.insert("characterSynonyms", {
+    await _db.insert("characterSynonyms", {
       "characterIdA": characterIdB,
       "characterIdB": characterIdA,
     });
   }
 
   Future<void> deleteCharacterSynonym(int characterIdA, int characterIdB) async {
-    await db.delete("characterSynonyms", 
+    await _db.delete("characterSynonyms", 
       where: "characterIdA = ? AND characterIdB = ?",
       whereArgs: [characterIdA, characterIdB],
     );
-    await db.delete("characterSynonyms", 
+    await _db.delete("characterSynonyms", 
       where: "characterIdA = ? AND characterIdB = ?",
       whereArgs: [characterIdB, characterIdA],
     );

@@ -1,13 +1,11 @@
-import 'package:app/data/models/character.dart';
 import 'package:app/data/models/data_model.dart';
-import 'package:app/data/models/word.dart';
 
 class Morpheme extends DataModel {
-  List<Morpheme>? synonyms;
-  List<Morpheme>? doublets;
-  List<Character>? definitiveCharacters;
-  List<Character>? tentativeCharacters;
-  List<Word>? words;
+  List<int>? synonyms;
+  List<int>? doublets;
+  List<int>? definitiveCharacters;
+  List<int>? tentativeCharacters;
+  List<int>? words;
 
   Morpheme({
     super.id = 0,
@@ -21,7 +19,7 @@ class Morpheme extends DataModel {
   });
   
   Map<String, Object?> toMap() => {
-    "id": (id == 0)? null : id,
+    "id": (id == 0) ? null : id,
     "form": form,
     "notes": notes,
   };
