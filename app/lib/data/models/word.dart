@@ -1,4 +1,5 @@
 import 'package:app/data/models/data_model.dart';
+import 'package:flutter/foundation.dart';
 
 class Word extends DataModel {
   List<int>? components;
@@ -19,4 +20,23 @@ class Word extends DataModel {
     "form": form,
     "notes": notes,
   };
+
+  @override
+  bool operator ==(Object other) =>
+    super == other &&
+    other is Word &&
+    (!hasDetails || !other.hasDetails || (
+      listEquals(components, other.components) &&
+      listEquals(synonyms, other.synonyms) &&
+      listEquals(calques, other.calques)
+    ))
+  ;
+
+  @override
+  int get hashCode =>
+    super.hashCode +
+    (components?.reduce((a, b) => a + b) ?? 0) +
+    (synonyms?.reduce((a, b) => a + b) ?? 0) +
+    (calques?.reduce((a, b) => a + b) ?? 0)
+  ;
 }

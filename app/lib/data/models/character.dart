@@ -1,4 +1,5 @@
 import 'package:app/data/models/data_model.dart';
+import 'package:flutter/foundation.dart';
 
 class Character extends DataModel {
   List<int>? synonyms;
@@ -29,4 +30,33 @@ class Character extends DataModel {
     "form": form,
     "notes": notes,
   };
+  
+  @override
+  bool operator ==(Object other) =>
+    super == other &&
+    other is Character &&
+    (!hasDetails || !other.hasDetails || (
+      listEquals(synonyms, other.synonyms) &&
+      listEquals(definitiveMeanings, other.definitiveMeanings) &&
+      listEquals(tentativeMeanings, other.tentativeMeanings) &&
+      listEquals(extantPronunciations, other.extantPronunciations) &&
+      listEquals(definitivePronunciations, other.definitivePronunciations) &&
+      listEquals(tentativePronunciations, other.tentativePronunciations) &&
+      listEquals(components, other.components) &&
+      listEquals(products, other.products)
+    ))
+  ;
+
+  @override
+  int get hashCode =>
+    super.hashCode +
+    (synonyms?.reduce((a, b) => a + b) ?? 0) +
+    (definitiveMeanings?.reduce((a, b) => a + b) ?? 0) +
+    (tentativeMeanings?.reduce((a, b) => a + b) ?? 0) +
+    (extantPronunciations?.map((str) => str.hashCode).reduce((a, b) => a + b) ?? 0) +
+    (definitivePronunciations?.map((str) => str.hashCode).reduce((a, b) => a + b) ?? 0) +
+    (tentativePronunciations?.map((str) => str.hashCode).reduce((a, b) => a + b) ?? 0) +
+    (components?.reduce((a, b) => a + b) ?? 0) +
+    (products?.reduce((a, b) => a + b) ?? 0)
+  ;
 }
