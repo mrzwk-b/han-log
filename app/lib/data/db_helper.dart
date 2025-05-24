@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'package:path/path.dart';
-import 'package:sqflite/sqflite.dart';
+import 'dart:io';
+import 'package:path/path.dart' as path;
+
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:app/data/models/character.dart';
 import 'package:app/data/models/morpheme.dart';
@@ -14,112 +16,122 @@ class DbHelper {
   factory DbHelper() => helper;
 
   Future<Database> openDb() async {
-    _db = await openDatabase(
-      join(await getDatabasesPath(), 'han_log.db'),
-      onCreate: (database, version) async {        
-        // morphemes
-        await database.execute(
-          "CREATE TABLE morphemes("
-          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-          "form TEXT NOT NULL, "
-          "notes TEXT NOT NULL)"
-        );
-        await database.execute(
-          "CREATE TABLE morphemeSynonyms("
-          "morphemeIdA INTEGER NOT NULL, "
-          "morphemeIdB INTEGER NOT NULL, "
-          "UNIQUE(morphemeIdA, morphemeIdB), "
-          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE morphemeDoublets("
-          "morphemeIdA INTEGER NOT NULL, "
-          "morphemeIdB INTEGER NOT NULL, "
-          "UNIQUE(morphemeIdA, morphemeIdB), "
-          "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        // words
-        await database.execute(
-          "CREATE TABLE words("
-          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-          "form TEXT NOT NULL, "
-          "notes TEXT NOT NULL)"
-        );
-        await database.execute(
-          "CREATE TABLE wordCompositions("
-          "wordId INTEGER NOT NULL, "
-          "morphemeId INTEGER NOT NULL, "
-          "position INTEGER, "
-          "UNIQUE(wordId, position), "
-          "FOREIGN KEY(wordId) REFERENCES words(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE wordSynonyms("
-          "wordIdA INTEGER NOT NULL, "
-          "wordIdB INTEGER NOT NULL, "
-          "UNIQUE(wordIdA, wordIdB), "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE wordCalques("
-          "wordIdA INTEGER NOT NULL, "
-          "wordIdB INTEGER NOT NULL, "
-          "UNIQUE(wordIdA, wordIdB), "
-          "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        // characters
-        await database.execute(
-          "CREATE TABLE characters("
-          "id INTEGER PRIMARY KEY AUTOINCREMENT, "
-          "form TEXT NOT NULL UNIQUE, "
-          "notes TEXT NOT NULL)"
-        );
-        await database.execute(
-          "CREATE TABLE characterMeanings("
-          "isDefinitive INTEGER NOT NULL, "
-          "characterId INTEGER NOT NULL, "
-          "morphemeId INTEGER NOT NULL, "
-          "UNIQUE(characterId, morphemeId), "
-          "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE characterPronunciations("
-          "isDefinitive INTEGER, "
-          "pronunciation TEXT NOT NULL, "
-          "characterId INTEGER NOT NULL, "
-          "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE characterCompositions("
-          "componentId INTEGER NOT NULL, "
-          "composedId INTEGER NOT NULL, "
-          "FOREIGN KEY(componentId) REFERENCES characters(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(composedId) REFERENCES characters(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-        await database.execute(
-          "CREATE TABLE characterSynonyms("
-          "characterIdA INTEGER NOT NULL, "
-          "characterIdB INTEGER NOT NULL, "
-          "FOREIGN KEY(characterIdA) REFERENCES characters(id) ON DELETE CASCADE, "
-          "FOREIGN KEY(characterIdB) REFERENCES characters(id) ON DELETE CASCADE"
-          ") WITHOUT ROWID"
-        );
-      },
-      version: 1
+    if (Platform.isWindows || Platform.isLinux) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    
+    }
+    _db = await databaseFactory.openDatabase(
+      path.join(Directory.current.path, 'han_log.db'), // TODO probably need to make this more robust
+      options: OpenDatabaseOptions(
+        version: 1,
+        onCreate: (Database database, int version) async {
+          // morphemes
+          await database.execute(
+            "CREATE TABLE morphemes("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "form TEXT NOT NULL, "
+            "notes TEXT NOT NULL)"
+          );
+          await database.execute(
+            "CREATE TABLE morphemeSynonyms("
+            "morphemeIdA INTEGER NOT NULL, "
+            "morphemeIdB INTEGER NOT NULL, "
+            "PRIMARY KEY(morphemeIdA, morphemeIdB), "
+            "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE morphemeDoublets("
+            "morphemeIdA INTEGER NOT NULL, "
+            "morphemeIdB INTEGER NOT NULL, "
+            "PRIMARY KEY(morphemeIdA, morphemeIdB), "
+            "FOREIGN KEY(morphemeIdA) REFERENCES morphemes(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(morphemeIdB) REFERENCES morphemes(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          // words
+          await database.execute(
+            "CREATE TABLE words("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "form TEXT NOT NULL, "
+            "notes TEXT NOT NULL)"
+          );
+          await database.execute(
+            "CREATE TABLE wordCompositions("
+            "wordId INTEGER NOT NULL, "
+            "morphemeId INTEGER NOT NULL, "
+            "position INTEGER, "
+            "PRIMARY KEY(wordId, position), "
+            "FOREIGN KEY(wordId) REFERENCES words(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE wordSynonyms("
+            "wordIdA INTEGER NOT NULL, "
+            "wordIdB INTEGER NOT NULL, "
+            "PRIMARY KEY(wordIdA, wordIdB), "
+            "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE wordCalques("
+            "wordIdA INTEGER NOT NULL, "
+            "wordIdB INTEGER NOT NULL, "
+            "PRIMARY KEY(wordIdA, wordIdB), "
+            "FOREIGN KEY(wordIdA) REFERENCES words(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(wordIdB) REFERENCES words(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          // characters
+          await database.execute(
+            "CREATE TABLE characters("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "form TEXT NOT NULL UNIQUE, "
+            "notes TEXT NOT NULL)"
+          );
+          await database.execute(
+            "CREATE TABLE characterMeanings("
+            "isDefinitive INTEGER NOT NULL, "
+            "characterId INTEGER NOT NULL, "
+            "morphemeId INTEGER NOT NULL, "
+            "PRIMARY KEY(characterId, morphemeId), "
+            "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(morphemeId) REFERENCES morphemes(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE characterPronunciations("
+            "isDefinitive INTEGER, "
+            "pronunciation TEXT NOT NULL, "
+            "characterId INTEGER NOT NULL, "
+            "PRIMARY KEY(characterId, pronunciation), "
+            "FOREIGN KEY(characterId) REFERENCES characters(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE characterCompositions("
+            "componentId INTEGER NOT NULL, "
+            "composedId INTEGER NOT NULL, "
+            "PRIMARY KEY(componentId, composedId), "
+            "FOREIGN KEY(componentId) REFERENCES characters(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(composedId) REFERENCES characters(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+          await database.execute(
+            "CREATE TABLE characterSynonyms("
+            "characterIdA INTEGER NOT NULL, "
+            "characterIdB INTEGER NOT NULL, "
+            "PRIMARY KEY(characterIdA, characterIdB), "
+            "FOREIGN KEY(characterIdA) REFERENCES characters(id) ON DELETE CASCADE, "
+            "FOREIGN KEY(characterIdB) REFERENCES characters(id) ON DELETE CASCADE"
+            ") WITHOUT ROWID"
+          );
+        },
+      ),
     );
     return _db;
   }
@@ -158,23 +170,25 @@ class DbHelper {
   Future<int> insertMorpheme(Morpheme morpheme) async {
     int id = await _db.insert("morphemes", morpheme.toMap());
     morpheme.id = id;
-    for (Future insertion in [
-      for (int synonymId in morpheme.synonyms ?? []) 
-        insertMorphemeSynonym(morpheme.id, synonymId)
-      ,
-      for (int doubletId in morpheme.doublets ?? [])
-        insertMorphemeDoublet(morpheme.id, doubletId)
-      ,
-      for (int characterId in morpheme.definitiveCharacters ?? [])
-        insertCharacterMeaning(characterId: characterId, morphemeId: morpheme.id, isDefinitive: true)
-      ,
-      for (int characterId in morpheme.tentativeCharacters ?? [])
-        insertCharacterMeaning(characterId: characterId, morphemeId: morpheme.id, isDefinitive: false)
-      ,
-      for (int wordId in morpheme.words ?? [])
-        insertWordComposition(wordId: wordId, morphemeId: morpheme.id)
-      ,
-    ]) {await insertion;}
+    if (id != 0) {
+      for (Future insertion in [
+        for (int synonymId in morpheme.synonyms ?? []) 
+          insertMorphemeSynonym(id, synonymId)
+        ,
+        for (int doubletId in morpheme.doublets ?? [])
+          insertMorphemeDoublet(id, doubletId)
+        ,
+        for (int characterId in morpheme.definitiveCharacters ?? [])
+          insertCharacterMeaning(characterId: characterId, morphemeId: id, isDefinitive: true)
+        ,
+        for (int characterId in morpheme.tentativeCharacters ?? [])
+          insertCharacterMeaning(characterId: characterId, morphemeId: id, isDefinitive: false)
+        ,
+        for (int wordId in morpheme.words ?? [])
+          insertWordComposition(wordId: wordId, morphemeId: id)
+        ,
+      ]) {await insertion;}
+    }
     return id;
   }
   
@@ -183,7 +197,7 @@ class DbHelper {
   }
   
   Future<void> deleteMorpheme(int morphemeId) async {
-    await _db.delete("morpheme", where: "id = ?", whereArgs: [morphemeId]);
+    await _db.delete("morphemes", where: "id = ?", whereArgs: [morphemeId]);
   }
   
   Future<List<int>> getMorphemeSynonymIds(int morphemeId) async => [
@@ -264,11 +278,10 @@ class DbHelper {
       notes: data["notes"] as String,
     )).toList(growable: false)
   ;
-  
 
   Future<void> getWordDetails(Word word) async {
     for (Future assignment in [
-      getWordComponents(word.id).then((value) {word.components = value;},),
+      getWordComponentIds(word.id).then((value) {word.components = value;},),
       getWordSynonymIds(word.id).then((value) {word.synonyms = value;},),
       getWordCalqueIds(word.id).then((value) {word.calques = value;},),
     ]) {await assignment;}
@@ -360,7 +373,7 @@ class DbHelper {
     );
   }
 
-  Future<List<int>> getWordComponents(int wordId) async => [
+  Future<List<int>> getWordComponentIds(int wordId) async => [
     for (Map<String, Object?> component in await _db.query("wordCompositions",
       where: "wordId = ?",
       whereArgs: [wordId],
@@ -572,7 +585,6 @@ class DbHelper {
     )) component["componentId"] as int
   ];
 
-  
   Future<List<int>> getCharacterProducts(int characterId) async =>[
     for (Map<String, Object?> composed in await _db.query("characterCompositions",
       where: "componentId = ?",
