@@ -10,10 +10,17 @@ void main() async {
   tearDown(() async {
     for (Future deletion in [
       db.delete('morphemes'),
+      db.delete('morphemeSynonyms'),
+      db.delete('morphemeDoublets'),
       db.delete('words'),
+      db.delete('wordSynonyms'),
+      db.delete('wordCalques'),
+      db.delete('wordCompositions'),
       db.delete('characters'),
-      // all relationship tables have ON DELETE CASCADE
-      // so no other deletions should be necessary
+      db.delete('characterPronunciations'),
+      db.delete('characterSynonyms'),
+      db.delete('characterCompositions'),
+      db.delete('characterMeanings'),
     ]) {await deletion;}
   });
 
@@ -383,19 +390,199 @@ void main() async {
     });
     group('insertMorpheme()', () {
       test('unconnected', () async {
-        
+        expect(await db.query('morphemes'), hasLength(0));
+
+        Morpheme morpheme = Morpheme(
+          form: 'one',
+          notes: 'number',
+        );
+        await dbHelper.insertMorpheme(morpheme);
+
+        expect(await db.query('morphemeSynonyms', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('morphemeDoublets', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('wordCompositions', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('characterMeanings', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+
+        List<Map<String, Object?>> dbContents = await db.query('morphemes');
+        expect(dbContents, hasLength(1));
+        Map<String, Object?> morphemeData = dbContents.single;
+        expect(morphemeData['id'], morpheme.id);
+        expect(morphemeData['form'], 'one');
+        expect(morphemeData['notes'], 'number');
       });
+      // insertMorpheme() calls other DbHelper insert methods
+      // if `unconnected` passes but others fail it might be an upstream issue
+      // make sure depended tests pass before trying to debug
       test('synonyms', () async {
+        expect(await db.query('morphemes'), hasLength(0));
+        expect(await db.query('morphemeSynonyms'), hasLength(0));
+
+        await db.insert('morphemes', {
+          'id': 2,
+          'form': 'mono',
+          'notes': 'greek'
+        });
+        await db.insert('morphemes', {
+          'id': 3,
+          'form': 'un',
+          'notes': 'latin'
+        });
+        Morpheme morpheme = Morpheme(
+          form: 'one',
+          notes: 'english',
+          synonyms: [2, 3]
+        );
+        await dbHelper.insertMorpheme(morpheme);
         
+        expect(await db.query('morphemeDoublets', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('wordCompositions', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('characterMeanings', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+
+        List<Map<String, Object?>> synonymPairs = await db.query(
+          'morphemeSynonyms', columns: ['morphemeIdB'],
+          where: 'morphemeIdA = ?', whereArgs: [morpheme.id],
+        );
+        expect(synonymPairs, hasLength(2));
+        expect(synonymPairs, containsAll([{'morphemeIdB': 2}, {'morphemeIdB': 3}]));
+
+        List<Map<String, Object?>> dbContents = await db.query(
+          'morphemes',
+          where: 'id = ?', whereArgs: [morpheme.id]
+        );
+        expect(dbContents, hasLength(1));
+        Map<String, Object?> morphemeData = dbContents.single;
+        expect(morphemeData['id'], morpheme.id);
+        expect(morphemeData['form'], 'one');
+        expect(morphemeData['notes'], 'english');
       });
       test('doublets', () async {
+        expect(await db.query('morphemes'), hasLength(0));
+        expect(await db.query('morphemeDoublets'), hasLength(0));
+
+        await db.insert('morphemes', {
+          'id': 2,
+          'form': 'host',
+          'notes': 'of an event'
+        });
+        Morpheme morpheme = Morpheme(
+          form: 'guest',
+          notes: 'at an event',
+          doublets: [2]
+        );
+        await dbHelper.insertMorpheme(morpheme);
         
+        expect(await db.query('morphemeSynonyms', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('wordCompositions', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('characterMeanings', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
+
+        List<Map<String, Object?>> doubletPairs = await db.query(
+          'morphemeDoublets', columns: ['morphemeIdB'],
+          where: 'morphemeIdA = ?', whereArgs: [morpheme.id],
+        );
+        expect(doubletPairs, hasLength(1));
+        expect(doubletPairs, containsAll([{'morphemeIdB': 2}]));
+
+        List<Map<String, Object?>> dbContents = await db.query(
+          'morphemes',
+          where: 'id = ?', whereArgs: [morpheme.id]
+        );
+        expect(dbContents, hasLength(1));
+        Map<String, Object?> morphemeData = dbContents.single;
+        expect(morphemeData['id'], morpheme.id);
+        expect(morphemeData['form'], 'guest');
+        expect(morphemeData['notes'], 'at an event');
       });
       test('characters', () async {
+        expect(await db.query('morphemes'), hasLength(0));
+        expect(await db.query('characterMeanings'), hasLength(0));
+
+        await db.insert('characters', {
+          'id': 1,
+          'form': '一',
+          'notes': 'standard numeral'
+        });
+        await db.insert('characters', {
+          'id': 2,
+          'form': '壹',
+          'notes': 'financial variant'
+        });
+        await db.insert('characters', {
+          'id': 3,
+          'form': '蜀',
+          'notes': 'min variant'
+        });
+        Morpheme morpheme = Morpheme(
+          form: 'one',
+          notes: 'english',
+          definitiveCharacters: [1],
+          tentativeCharacters: [2, 3],
+        );
+        await dbHelper.insertMorpheme(morpheme);
+
+        expect(await db.query('morphemeSynonyms', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('morphemeDoublets', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('wordCompositions', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
         
+        List<Map<String, Object?>> transliterations;
+        transliterations = await db.query(
+          'characterMeanings', columns: ['characterId'],
+          where: 'morphemeId = ? AND isDefinitive = 0', whereArgs: [morpheme.id],
+        );
+        expect(transliterations, hasLength(2));
+        expect(transliterations, containsAll([{'characterId': 2}, {'characterId': 3}]));
+        transliterations = await db.query(
+          'characterMeanings', columns: ['characterId'],
+          where: 'morphemeId = ? AND isDefinitive = 1', whereArgs: [morpheme.id],
+        );
+        expect(transliterations, hasLength(1));
+        expect(transliterations, containsAll([{'characterId': 1}]));
+        
+        List<Map<String, Object?>> dbContents = await db.query('morphemes');
+        expect(dbContents, hasLength(1));
+        Map<String, Object?> morphemeData = dbContents.single;
+        expect(morphemeData['id'], morpheme.id);
+        expect(morphemeData['form'], 'one');
+        expect(morphemeData['notes'], 'english');
       });
       test('words', () async {
+        expect(await db.query('morphemes'), hasLength(0));
+        expect(await db.query('wordCompositions'), hasLength(0));
+
+        await db.insert('words', {
+          'id': 1,
+          'form': 'only',
+          'notes': 'nicki minaj'
+        });
+        await db.insert('words', {
+          'id': 2,
+          'form': 'once',
+          'notes': 'upon a midnight dreary'
+        });
+        Morpheme morpheme = Morpheme(
+          form: 'one',
+          notes: 'english',
+          words: [1, 2],
+        );
+        await dbHelper.insertMorpheme(morpheme);
+
+        expect(await db.query('morphemeSynonyms', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('morphemeDoublets', where: 'morphemeIdA = ?', whereArgs: [morpheme.id]), hasLength(0));
+        expect(await db.query('characterMeanings', where: 'morphemeId = ?', whereArgs: [morpheme.id]), hasLength(0));
         
+        List<Map<String, Object?>> wordCompositions;
+        wordCompositions = await db.query(
+          'wordCompositions', columns: ['wordId'],
+          where: 'morphemeId = ?', whereArgs: [morpheme.id],
+        );
+        expect(wordCompositions, hasLength(2));
+        expect(wordCompositions, containsAll([{'wordId': 1}, {'wordId': 2}]));
+        
+        List<Map<String, Object?>> dbContents = await db.query('morphemes');
+        expect(dbContents, hasLength(1));
+        Map<String, Object?> morphemeData = dbContents.single;
+        expect(morphemeData['id'], morpheme.id);
+        expect(morphemeData['form'], 'one');
+        expect(morphemeData['notes'], 'english');
       });
     });
     group('updateMorpheme()', () {

@@ -390,6 +390,17 @@ class DbHelper {
   ];
   
   Future<void> insertWordComposition({required int wordId, required int morphemeId, int? position}) async {
+    if (position == null) {
+      Set<int> extantPositions = (await _db.query(
+        'wordCompositions', columns: ['position'],
+        where: 'wordId = ?', whereArgs: [wordId]
+      )).map((component) => component['position'] as int).toSet();
+      int i = 0;
+      while (extantPositions.contains(i)) {
+        i += 1;
+      }
+      position = i;
+    }
     await _db.insert("wordCompositions", {
       "wordId": wordId,
       "morphemeId": morphemeId,
